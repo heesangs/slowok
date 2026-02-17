@@ -50,6 +50,11 @@ export interface AISubtaskSuggestion {
   estimated_minutes: number;
 }
 
+// 과제 + 하위 과제 조인 타입
+export interface TaskWithSubtasks extends Task {
+  subtasks: Subtask[];
+}
+
 // 클라이언트 편집용 하위 과제 타입
 export interface EditableSubtask {
   temp_id: string;
