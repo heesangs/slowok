@@ -1,6 +1,7 @@
 // (main) 라우트 그룹 레이아웃 — 상단 헤더 + 중앙 정렬 컨테이너
 
 import Link from "next/link";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 
 export default function MainLayout({
   children,
@@ -11,10 +12,11 @@ export default function MainLayout({
     <div className="min-h-dvh flex flex-col">
       {/* 상단 헤더 */}
       <header className="border-b border-foreground/10 px-4 py-3">
-        <div className="mx-auto max-w-2xl">
-          <Link href="/" className="text-lg font-bold">
+        <div className="mx-auto max-w-2xl flex items-center justify-between">
+          <Link href="/dashboard" className="text-lg font-bold">
             slowok
           </Link>
+          <SignOutButton />
         </div>
       </header>
 

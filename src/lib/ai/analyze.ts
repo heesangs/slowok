@@ -25,6 +25,37 @@ function buildProfileContext(profile: Profile | null): string {
   return parts.length > 0 ? parts.join("\n") : "학생 정보가 없습니다.";
 }
 
+// Gemini 에러를 사용자 친화 메시지로 변환
+function mapGeminiError(error: unknown): Error {
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  const lower = rawMessage.toLowerCase();
+  const retryMatch = rawMessage.match(/retry in\s*([\d.]+)s/i);
+  const retrySeconds = retryMatch ? Math.ceil(Number(retryMatch[1])) : null;
+
+  if (
+    lower.includes("429") ||
+    lower.includes("too many requests") ||
+    lower.includes("quota")
+  ) {
+    return new Error(
+      retrySeconds
+        ? `AI 사용량 한도에 도달했어요. ${retrySeconds}초 후 다시 시도하거나 Gemini 요금제/한도를 확인해주세요.`
+        : "AI 사용량 한도에 도달했어요. 잠시 후 다시 시도하거나 Gemini 요금제/한도를 확인해주세요."
+    );
+  }
+
+  if (
+    lower.includes("401") ||
+    lower.includes("403") ||
+    lower.includes("api key") ||
+    lower.includes("permission")
+  ) {
+    return new Error("Gemini API 키 또는 권한 설정을 확인해주세요.");
+  }
+
+  return new Error("AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+}
+
 /**
  * 과제를 3~7개 하위 과제로 분해
  */
@@ -53,9 +84,14 @@ ${buildProfileContext(profile)}
   { "title": "하위 과제 제목", "difficulty": "easy|medium|hard", "estimated_minutes": 숫자 }
 ]`;
 
-  const result = await geminiModel.generateContent(prompt);
-  const text = result.response.text();
-  const parsed = parseJsonResponse(text) as AISubtaskSuggestion[];
+  let parsed: AISubtaskSuggestion[];
+  try {
+    const result = await geminiModel.generateContent(prompt);
+    const text = result.response.text();
+    parsed = parseJsonResponse(text) as AISubtaskSuggestion[];
+  } catch (error) {
+    throw mapGeminiError(error);
+  }
 
   // 유효성 검증
   if (!Array.isArray(parsed) || parsed.length === 0) {
@@ -98,9 +134,14 @@ ${buildProfileContext(profile)}
   { "title": "단계 제목", "difficulty": "easy|medium|hard", "estimated_minutes": 숫자 }
 ]`;
 
-  const result = await geminiModel.generateContent(prompt);
-  const text = result.response.text();
-  const parsed = parseJsonResponse(text) as AISubtaskSuggestion[];
+  let parsed: AISubtaskSuggestion[];
+  try {
+    const result = await geminiModel.generateContent(prompt);
+    const text = result.response.text();
+    parsed = parseJsonResponse(text) as AISubtaskSuggestion[];
+  } catch (error) {
+    throw mapGeminiError(error);
+  }
 
   if (!Array.isArray(parsed) || parsed.length === 0) {
     throw new Error("AI 응답이 올바르지 않습니다.");

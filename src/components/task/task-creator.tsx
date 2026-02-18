@@ -54,6 +54,32 @@ function suggestionsToEditable(
   }));
 }
 
+// 특정 부모의 모든 하위 노드(자손) temp_id 수집
+function collectDescendantTempIds(
+  subtasks: EditableSubtask[],
+  parentTempId: string
+): Set<string> {
+  const descendantIds = new Set<string>();
+  const queue: string[] = [parentTempId];
+
+  while (queue.length > 0) {
+    const currentParentId = queue.shift();
+    if (!currentParentId) continue;
+
+    subtasks.forEach((subtask) => {
+      if (
+        subtask.parent_temp_id === currentParentId &&
+        !descendantIds.has(subtask.temp_id)
+      ) {
+        descendantIds.add(subtask.temp_id);
+        queue.push(subtask.temp_id);
+      }
+    });
+  }
+
+  return descendantIds;
+}
+
 const initialState: State = {
   phase: "input",
   taskTitle: "",
@@ -103,8 +129,14 @@ function reducer(state: State, action: Action): State {
       };
 
     case "DECOMPOSE_SUCCESS": {
-      // 기존 자식 제거 후 새 자식 추가
-      const filtered = state.subtasks.filter((s) => s.parent_temp_id !== action.parentTempId);
+      // 기존 자식/자손 제거 후 새 자식 추가
+      const descendantIds = collectDescendantTempIds(
+        state.subtasks,
+        action.parentTempId
+      );
+      const filtered = state.subtasks.filter(
+        (s) => !descendantIds.has(s.temp_id)
+      );
       const parent = filtered.find((s) => s.temp_id === action.parentTempId);
       const newDepth = (parent?.depth ?? 0) + 1;
       const newChildren = suggestionsToEditable(action.suggestions, action.parentTempId, newDepth);

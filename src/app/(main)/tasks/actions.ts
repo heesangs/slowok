@@ -24,6 +24,47 @@ async function getProfile(supabase: Awaited<ReturnType<typeof createClient>>, us
   return data as Profile | null;
 }
 
+// 현재 사용자가 해당 과제에 접근 가능한지 확인
+async function assertTaskOwnership(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  taskId: string,
+  userId: string
+) {
+  const { data, error } = await supabase
+    .from("tasks")
+    .select("id")
+    .eq("id", taskId)
+    .eq("user_id", userId)
+    .single();
+
+  if (error || !data) {
+    throw new Error("해당 과제에 접근할 수 없습니다.");
+  }
+}
+
+// 서버 에러를 사용자 메시지로 안전하게 변환
+function toClientErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof Error)) return fallback;
+
+  const message = error.message?.trim();
+  if (!message) return fallback;
+
+  const lower = message.toLowerCase();
+  if (
+    lower.includes("googlegenerativeai") ||
+    lower.includes("generativelanguage.googleapis.com")
+  ) {
+    return "AI 서비스 호출 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.";
+  }
+
+  // 지나치게 긴 원문 에러는 노출하지 않음
+  if (message.length > 180) {
+    return fallback;
+  }
+
+  return message;
+}
+
 /**
  * 과제 분석 — AI가 하위 과제로 분해
  */
@@ -40,7 +81,7 @@ export async function analyzeTaskAction(title: string): Promise<{
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "분석 중 오류가 발생했습니다.",
+      error: toClientErrorMessage(error, "분석 중 오류가 발생했습니다."),
     };
   }
 }
@@ -64,7 +105,140 @@ export async function decomposeSubtaskAction(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "분해 중 오류가 발생했습니다.",
+      error: toClientErrorMessage(error, "분해 중 오류가 발생했습니다."),
+    };
+  }
+}
+
+/**
+ * 하위 과제 상태 토글 — completed ↔ pending
+ * 모든 하위 과제가 완료되면 상위 과제도 completed 처리
+ */
+export async function toggleSubtaskAction(
+  subtaskId: string,
+  taskId: string,
+  newStatus: "pending" | "completed"
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { supabase, userId } = await getAuthUserId();
+    await assertTaskOwnership(supabase, taskId, userId);
+
+    const now = new Date().toISOString();
+    const { data: updatedSubtask, error: updateError } = await supabase
+      .from("subtasks")
+      .update({
+        status: newStatus,
+        completed_at: newStatus === "completed" ? now : null,
+      })
+      .eq("id", subtaskId)
+      .eq("task_id", taskId)
+      .select("id")
+      .single();
+
+    if (updateError || !updatedSubtask) {
+      throw new Error(updateError?.message ?? "하위 과제 상태를 찾을 수 없습니다.");
+    }
+
+    // 모든 하위 과제 상태 확인 → 전부 완료면 과제도 completed
+    const { data: subtasks, error: subtasksError } = await supabase
+      .from("subtasks")
+      .select("status")
+      .eq("task_id", taskId);
+
+    if (subtasksError || !subtasks) {
+      throw new Error(subtasksError?.message ?? "하위 과제 조회에 실패했습니다.");
+    }
+
+    const allCompleted =
+      subtasks.length > 0 && subtasks.every((s) => s.status === "completed");
+    const anyInProgress = subtasks.some(
+      (s) => s.status === "in_progress" || s.status === "completed"
+    );
+
+    let taskStatus: "pending" | "in_progress" | "completed" = "pending";
+    if (allCompleted) taskStatus = "completed";
+    else if (anyInProgress) taskStatus = "in_progress";
+
+    const { error: taskUpdateError } = await supabase
+      .from("tasks")
+      .update({
+        status: taskStatus,
+        completed_at: allCompleted ? now : null,
+      })
+      .eq("id", taskId);
+
+    if (taskUpdateError) throw new Error(taskUpdateError.message);
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "상태 변경 중 오류가 발생했습니다.",
+    };
+  }
+}
+
+/**
+ * 하위 과제 실제 소요 시간 업데이트
+ */
+export async function updateActualMinutesAction(
+  subtaskId: string,
+  taskId: string,
+  actualMinutes: number
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { supabase, userId } = await getAuthUserId();
+    await assertTaskOwnership(supabase, taskId, userId);
+
+    if (!Number.isFinite(actualMinutes) || actualMinutes < 0) {
+      throw new Error("실제 소요 시간 값이 올바르지 않습니다.");
+    }
+
+    const normalizedMinutes = Math.round(actualMinutes);
+
+    const { data: updatedSubtask, error: updateError } = await supabase
+      .from("subtasks")
+      .update({ actual_minutes: normalizedMinutes })
+      .eq("id", subtaskId)
+      .eq("task_id", taskId)
+      .select("id")
+      .single();
+
+    if (updateError || !updatedSubtask) {
+      throw new Error(updateError?.message ?? "하위 과제를 찾을 수 없습니다.");
+    }
+
+    // 과제의 total_actual_minutes 업데이트 — leaf 노드만 합산
+    const { data: allSubtasks, error: subtasksError } = await supabase
+      .from("subtasks")
+      .select("id, parent_subtask_id, actual_minutes")
+      .eq("task_id", taskId);
+
+    if (subtasksError || !allSubtasks) {
+      throw new Error(subtasksError?.message ?? "하위 과제 조회에 실패했습니다.");
+    }
+
+    const parentIds = new Set(
+      allSubtasks
+        .filter((s) => s.parent_subtask_id)
+        .map((s) => s.parent_subtask_id)
+    );
+    const leafTotal = allSubtasks
+      .filter((s) => !parentIds.has(s.id))
+      .reduce((sum, s) => sum + (s.actual_minutes ?? 0), 0);
+
+    const { error: taskUpdateError } = await supabase
+      .from("tasks")
+      .update({ total_actual_minutes: leafTotal || null })
+      .eq("id", taskId);
+
+    if (taskUpdateError) throw new Error(taskUpdateError.message);
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "시간 업데이트 중 오류가 발생했습니다.",
     };
   }
 }

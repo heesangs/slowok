@@ -38,7 +38,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           <div
             key={t.id}
             className={cn(
-              "px-4 py-3 rounded-lg text-sm font-medium shadow-lg animate-[fadeIn_0.2s_ease-out]",
+              "px-4 py-3 rounded-lg text-sm font-medium shadow-lg animate-[fadeIn_0.2s_ease-out] break-words whitespace-pre-wrap max-h-40 overflow-y-auto",
               t.type === "success"
                 ? "bg-green-600 text-white"
                 : "bg-red-600 text-white"
