@@ -55,6 +55,18 @@ export interface TaskWithSubtasks extends Task {
   subtasks: Subtask[];
 }
 
+// 과제 통계 타입
+export interface TaskStats {
+  totalTasks: number;
+  completedTasks: number;
+  inProgressTasks: number;
+  totalSubtasks: number;
+  completedSubtasks: number;
+  estimatedMinutesTotal: number;
+  actualMinutesTotal: number;
+  difficultyDistribution: { easy: number; medium: number; hard: number };
+}
+
 // 클라이언트 편집용 하위 과제 타입
 export interface EditableSubtask {
   temp_id: string;
