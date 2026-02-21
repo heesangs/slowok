@@ -1,4 +1,4 @@
-// 대시보드 페이지 — 오늘의 할일 요약 (Server Component)
+// 대시보드 페이지 — 전체 할일 요약 (Server Component)
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -26,22 +26,11 @@ export default async function DashboardPage() {
 
   const displayName = profile?.display_name ?? null;
 
-  // KST(UTC+9) 기준 오늘 날짜 범위 계산
-  const KST_OFFSET = 9 * 60 * 60 * 1000;
-  const now = new Date(Date.now() + KST_OFFSET);
-  const startOfDayUTC = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-  );
-  const startOfDayKST = new Date(startOfDayUTC.getTime() - KST_OFFSET);
-  const endOfDayKST = new Date(startOfDayKST.getTime() + 24 * 60 * 60 * 1000);
-
-  // 오늘 생성된 과제 + 하위 과제 조회
+  // 사용자 전체 과제 + 하위 과제 조회
   const { data: tasks, error } = await supabase
     .from("tasks")
     .select("*, subtasks(*)")
     .eq("user_id", user.id)
-    .gte("created_at", startOfDayKST.toISOString())
-    .lt("created_at", endOfDayKST.toISOString())
     .order("created_at", { ascending: false });
 
   // 에러 발생 시

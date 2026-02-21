@@ -57,6 +57,10 @@ export function DashboardContent({
     (sum, t) => sum + (t.total_estimated_minutes ?? 0),
     0
   );
+  const totalSubtasks = tasks.reduce(
+    (sum, t) => sum + (t.subtasks?.length ?? 0),
+    0
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -65,10 +69,10 @@ export function DashboardContent({
         <h1 className="text-xl font-bold">
           안녕, {displayName || "친구"} 👋
         </h1>
-        <p className="text-sm text-foreground/60 mt-1">
+          <p className="text-sm text-foreground/60 mt-1">
           {tasks.length > 0
-            ? `${tasks.length}개 할일, 총 ${formatMinutes(totalMinutes)}`
-            : "오늘 등록된 할일이 없어요"}
+            ? `${tasks.length}개 할일, ${totalSubtasks}개 하위과제, 총 ${formatMinutes(totalMinutes)}`
+            : "등록된 할일이 없어요"}
         </p>
       </div>
 

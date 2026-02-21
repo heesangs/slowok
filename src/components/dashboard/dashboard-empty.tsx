@@ -1,4 +1,4 @@
-// 대시보드 빈 상태 — 오늘의 할일이 없을 때 표시
+// 대시보드 빈 상태 — 등록된 할일이 없을 때 표시
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -60,7 +60,7 @@ export function DashboardEmpty({ displayName }: DashboardEmptyProps) {
       </svg>
 
       {/* 빈 상태 메시지 + CTA */}
-      <p className="text-foreground/60">아직 오늘의 할일이 없어요</p>
+      <p className="text-foreground/60">아직 등록된 할일이 없어요</p>
       <Link href="/tasks/new">
         <Button size="lg">할일 추가하기</Button>
       </Link>
