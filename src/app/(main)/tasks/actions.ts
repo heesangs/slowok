@@ -2,6 +2,7 @@
 
 // 과제 관련 서버 액션 — 인증 확인 후 AI 분석 및 DB 저장
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { analyzeTask, decomposeSubtask } from "@/lib/ai/analyze";
 import type { AISubtaskSuggestion, EditableSubtask, Profile } from "@/types";
@@ -63,6 +64,33 @@ function toClientErrorMessage(error: unknown, fallback: string): string {
   }
 
   return message;
+}
+
+/**
+ * 과제 삭제 — 소유권 확인 후 tasks 삭제 (subtasks는 CASCADE로 자동 삭제)
+ */
+export async function deleteTaskAction(
+  taskId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { supabase, userId } = await getAuthUserId();
+    await assertTaskOwnership(supabase, taskId, userId);
+
+    const { error } = await supabase
+      .from("tasks")
+      .delete()
+      .eq("id", taskId);
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/dashboard");
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "삭제 중 오류가 발생했습니다.",
+    };
+  }
 }
 
 /**

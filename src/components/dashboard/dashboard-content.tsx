@@ -3,11 +3,12 @@
 // 대시보드 콘텐츠 — 과제 목록 + 헤더 + FAB (Client Component)
 
 import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { TaskCard } from "@/components/dashboard/task-card";
 import { useToast } from "@/components/ui/toast";
 import { formatMinutes } from "@/lib/utils";
+import { deleteTaskAction } from "@/app/(main)/tasks/actions";
 import type { TaskWithSubtasks } from "@/types";
 
 interface DashboardContentProps {
@@ -23,7 +24,22 @@ export function DashboardContent({
 }: DashboardContentProps) {
   const { toast } = useToast();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [completedOpen, setCompletedOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(taskId: string) {
+    setDeletingId(taskId);
+    const result = await deleteTaskAction(taskId);
+    setDeletingId(null);
+
+    if (result.success) {
+      toast("할일을 삭제했습니다.", "success");
+      router.refresh();
+    } else {
+      toast(result.error ?? "삭제 중 오류가 발생했습니다.", "error");
+    }
+  }
 
   // /tasks/new에서 돌아왔을 때 성공 토스트 표시
   useEffect(() => {
@@ -84,7 +100,12 @@ export function DashboardContent({
           </h2>
           <div className="flex flex-col gap-3 md:grid md:grid-cols-2">
             {activeTasks.map((task) => (
-              <TaskCard key={task.id} task={task} />
+              <TaskCard
+                key={task.id}
+                task={task}
+                onDelete={() => handleDelete(task.id)}
+                isDeleting={deletingId === task.id}
+              />
             ))}
           </div>
         </section>
@@ -111,7 +132,12 @@ export function DashboardContent({
           {completedOpen && (
             <div className="flex flex-col gap-3 md:grid md:grid-cols-2">
               {completedTasks.map((task) => (
-                <TaskCard key={task.id} task={task} />
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  onDelete={() => handleDelete(task.id)}
+                  isDeleting={deletingId === task.id}
+                />
               ))}
             </div>
           )}
