@@ -1,6 +1,6 @@
 "use client";
 
-// 과제 통계 섹션 — 4개 카드 + 빈 상태 처리
+// 통계 섹션 — 4개 카드 + 빈 상태 처리
 
 import Link from "next/link";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
@@ -12,39 +12,39 @@ interface TaskStatsSectionProps {
 }
 
 export function TaskStatsSection({ stats }: TaskStatsSectionProps) {
-  // 과제가 없는 경우
+  // 할 일이 없는 경우
   if (stats.totalTasks === 0) {
     return (
       <Card>
         <CardHeader>
-          <h2 className="text-base font-semibold">나의 학습 통계</h2>
+          <h2 className="text-base font-semibold">나의 통계</h2>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-4 py-8">
           <p className="text-sm text-foreground/60 text-center">
-            아직 과제가 없어요.<br />
-            첫 과제를 만들면 학습 통계를 볼 수 있어요.
+            아직 할 일이 없어요.<br />
+            첫 할 일을 만들면 통계를 볼 수 있어요.
           </p>
           <Link href="/tasks/new">
-            <Button size="sm">첫 과제 만들기</Button>
+            <Button size="sm">첫 할 일 만들기</Button>
           </Link>
         </CardContent>
       </Card>
     );
   }
 
-  // 과제는 있지만 완료가 없는 경우
+  // 할 일은 있지만 완료가 없는 경우
   if (stats.completedTasks === 0) {
     return (
       <Card>
         <CardHeader>
-          <h2 className="text-base font-semibold">나의 학습 통계</h2>
+          <h2 className="text-base font-semibold">나의 통계</h2>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-2 py-8">
           <p className="text-sm text-foreground/60 text-center">
-            과제를 완료하면 여기에 통계가 나타나요
+            할 일을 완료하면 여기에 통계가 나타나요
           </p>
           <p className="text-xs text-foreground/40">
-            진행 중인 과제 {stats.inProgressTasks}개 / 전체 {stats.totalTasks}개
+            진행 중 {stats.inProgressTasks}개 / 전체 {stats.totalTasks}개
           </p>
         </CardContent>
       </Card>
@@ -80,14 +80,14 @@ export function TaskStatsSection({ stats }: TaskStatsSectionProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-base font-semibold">나의 학습 통계</h2>
+      <h2 className="text-base font-semibold">나의 통계</h2>
 
-      {/* Card 1: 과제 요약 */}
+      {/* Card 1: 할 일 요약 */}
       <div className="grid grid-cols-2 gap-3">
         <Card>
           <CardContent className="flex flex-col items-center py-4">
             <span className="text-2xl font-bold">{stats.totalTasks}</span>
-            <span className="text-xs text-foreground/60">전체 과제</span>
+            <span className="text-xs text-foreground/60">전체 할 일</span>
           </CardContent>
         </Card>
         <Card>
@@ -173,7 +173,7 @@ export function TaskStatsSection({ stats }: TaskStatsSectionProps) {
             </>
           ) : (
             <p className="text-sm text-foreground/50">
-              완료된 과제가 쌓이면 예측 정확도를 알려드릴게요
+              할 일을 완료하면 예측 정확도를 알려드릴게요
             </p>
           )}
         </CardContent>

@@ -6,12 +6,15 @@ export type Difficulty = "easy" | "medium" | "hard";
 
 export type SelfLevel = "low" | "medium" | "high";
 
+export type UserContext = "student" | "university" | "work" | "personal";
+
 export interface Profile {
   id: string;
   display_name: string | null;
   grade: string | null;
   subjects: string[] | null;
   self_level: SelfLevel;
+  user_context: UserContext[];
   created_at: string;
 }
 

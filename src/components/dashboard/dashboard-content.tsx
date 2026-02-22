@@ -87,7 +87,7 @@ export function DashboardContent({
         </h1>
           <p className="text-sm text-foreground/60 mt-1">
           {tasks.length > 0
-            ? `${tasks.length}개 할일, ${totalSubtasks}개 하위과제, 총 ${formatMinutes(totalMinutes)}`
+            ? `${tasks.length}개 할일, ${totalSubtasks}개 세부 단계, 총 ${formatMinutes(totalMinutes)}`
             : "등록된 할일이 없어요"}
         </p>
       </div>

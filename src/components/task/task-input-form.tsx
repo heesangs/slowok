@@ -25,8 +25,8 @@ export function TaskInputForm({ onSubmit, isLoading }: TaskInputFormProps) {
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <Input
         id="task-title"
-        label="과제 입력"
-        placeholder="예: 수학 중간고사 준비"
+        label="할 일 입력"
+        placeholder="예: 수학 중간고사 준비, 기획서 작성, 운동 루틴 만들기"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         disabled={isLoading}
