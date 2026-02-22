@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { analyzeTaskAction, decomposeSubtaskAction, saveTaskAction } from "@/app/(main)/tasks/actions";
-import type { Difficulty, EditableSubtask, AISubtaskSuggestion } from "@/types";
+import type { Difficulty, EditableSubtask, AISubtaskSuggestion, TaskInputData, UserContext } from "@/types";
 
 // 상태 타입
 type Phase = "input" | "analyzing" | "editing" | "saving";
@@ -17,12 +17,13 @@ type Phase = "input" | "analyzing" | "editing" | "saving";
 interface State {
   phase: Phase;
   taskTitle: string;
+  taskInputData: TaskInputData | null;
   subtasks: EditableSubtask[];
 }
 
 // 액션 타입
 type Action =
-  | { type: "START_ANALYZE"; title: string }
+  | { type: "START_ANALYZE"; data: TaskInputData }
   | { type: "ANALYZE_SUCCESS"; suggestions: AISubtaskSuggestion[] }
   | { type: "ANALYZE_FAIL" }
   | { type: "CHANGE_DIFFICULTY"; tempId: string; difficulty: Difficulty }
@@ -83,13 +84,19 @@ function collectDescendantTempIds(
 const initialState: State = {
   phase: "input",
   taskTitle: "",
+  taskInputData: null,
   subtasks: [],
 };
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "START_ANALYZE":
-      return { ...state, phase: "analyzing", taskTitle: action.title };
+      return {
+        ...state,
+        phase: "analyzing",
+        taskTitle: action.data.title,
+        taskInputData: action.data,
+      };
 
     case "ANALYZE_SUCCESS":
       return {
@@ -173,14 +180,18 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-export function TaskCreator() {
+interface TaskCreatorProps {
+  userContext?: UserContext[];
+}
+
+export function TaskCreator({ userContext }: TaskCreatorProps) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const { toast } = useToast();
 
   // 과제 분석 요청
-  const handleAnalyze = async (title: string) => {
-    dispatch({ type: "START_ANALYZE", title });
-    const result = await analyzeTaskAction(title);
+  const handleAnalyze = async (data: TaskInputData) => {
+    dispatch({ type: "START_ANALYZE", data });
+    const result = await analyzeTaskAction(data);
     if (result.success && result.data) {
       dispatch({ type: "ANALYZE_SUCCESS", suggestions: result.data });
     } else {
@@ -220,6 +231,10 @@ export function TaskCreator() {
     const result = await saveTaskAction({
       title: state.taskTitle,
       subtasks: state.subtasks,
+      memo: state.taskInputData?.memo,
+      desiredSubtaskCount: state.taskInputData?.desiredSubtaskCount,
+      targetDurationMinutes: state.taskInputData?.targetDurationMinutes,
+      dueDate: state.taskInputData?.dueDate,
     });
     if (result.success) {
       toast("과제가 저장되었습니다.", "success");
@@ -247,6 +262,7 @@ export function TaskCreator() {
             <TaskInputForm
               onSubmit={handleAnalyze}
               isLoading={state.phase === "analyzing"}
+              userContext={userContext}
             />
           </CardContent>
         </Card>

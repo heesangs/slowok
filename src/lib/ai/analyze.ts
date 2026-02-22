@@ -124,24 +124,47 @@ function mapGeminiError(error: unknown): Error {
   return new Error("AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
 }
 
+// AI 분석 힌트 (선택 컨텍스트)
+interface TaskAnalysisHints {
+  memo?: string;
+  desiredSubtaskCount?: number;
+  targetDurationMinutes?: number;
+  dueDate?: string;
+}
+
 /**
  * 할 일을 3~7개 하위 과제로 분해
  */
 export async function analyzeTask(
   taskTitle: string,
-  profile: Profile | null
+  profile: Profile | null,
+  hints?: TaskAnalysisHints
 ): Promise<AISubtaskSuggestion[]> {
   const studentOnly = isStudentOnly(profile);
   const taskLabel = studentOnly ? "다음 과제를" : "다음 할 일을";
   const levelLabel = studentOnly ? "학생의 수준을 고려하여" : "사용자의 수준을 고려하여";
   const profileLabel = studentOnly ? "학생 정보:" : "사용자 정보:";
 
+  // 힌트 블록 조건부 생성
+  const countHint = hints?.desiredSubtaskCount
+    ? `사용자가 약 ${hints.desiredSubtaskCount}개의 단계로 나눠주길 원합니다.`
+    : "3~7개의 하위 과제로 분해해주세요.";
+  const durationHint = hints?.targetDurationMinutes
+    ? `전체 소요 시간을 약 ${hints.targetDurationMinutes}분 이내로 계획해주세요.`
+    : "";
+  const memoHint = hints?.memo ? `상세 설명: ${hints.memo}` : "";
+  const dueDateHint = hints?.dueDate ? `마감일: ${hints.dueDate}` : "";
+
+  const hintsBlock = [memoHint, durationHint, dueDateHint]
+    .filter(Boolean)
+    .join("\n");
+
   const prompt = `${buildSystemIdentity(profile)}
 
 ${profileLabel}
 ${buildProfileContext(profile)}
 
-${taskLabel} 3~7개의 하위 과제로 분해해주세요.
+${taskLabel} ${countHint}
 각 하위 과제에 대해 난이도(easy/medium/hard)와 예상 소요 시간(분)을 제안해주세요.
 
 규칙:
@@ -151,7 +174,7 @@ ${taskLabel} 3~7개의 하위 과제로 분해해주세요.
 - 최소 5분, 최대 120분 범위
 
 할 일: "${taskTitle}"
-
+${hintsBlock ? hintsBlock + "\n" : ""}
 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요:
 [
   { "title": "하위 과제 제목", "difficulty": "easy|medium|hard", "estimated_minutes": 숫자 }

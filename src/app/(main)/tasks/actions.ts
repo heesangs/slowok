@@ -5,7 +5,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { analyzeTask, decomposeSubtask } from "@/lib/ai/analyze";
-import type { AISubtaskSuggestion, EditableSubtask, Profile } from "@/types";
+import type { AISubtaskSuggestion, EditableSubtask, Profile, TaskInputData } from "@/types";
 
 // 인증된 사용자 ID 반환 (미인증 시 에러)
 async function getAuthUserId() {
@@ -96,7 +96,7 @@ export async function deleteTaskAction(
 /**
  * 과제 분석 — AI가 하위 과제로 분해
  */
-export async function analyzeTaskAction(title: string): Promise<{
+export async function analyzeTaskAction(data: TaskInputData): Promise<{
   success: boolean;
   data?: AISubtaskSuggestion[];
   error?: string;
@@ -104,7 +104,12 @@ export async function analyzeTaskAction(title: string): Promise<{
   try {
     const { supabase, userId } = await getAuthUserId();
     const profile = await getProfile(supabase, userId);
-    const suggestions = await analyzeTask(title, profile);
+    const suggestions = await analyzeTask(data.title, profile, {
+      memo: data.memo,
+      desiredSubtaskCount: data.desiredSubtaskCount,
+      targetDurationMinutes: data.targetDurationMinutes,
+      dueDate: data.dueDate,
+    });
     return { success: true, data: suggestions };
   } catch (error) {
     return {
@@ -278,6 +283,10 @@ export async function updateActualMinutesAction(
 export async function saveTaskAction(data: {
   title: string;
   subtasks: EditableSubtask[];
+  memo?: string;
+  desiredSubtaskCount?: number;
+  targetDurationMinutes?: number;
+  dueDate?: string;
 }): Promise<{
   success: boolean;
   taskId?: string;
@@ -312,6 +321,10 @@ export async function saveTaskAction(data: {
       p_title: data.title,
       p_total_estimated_minutes: totalMinutes,
       p_subtasks: subtaskRows,
+      p_memo: data.memo ?? null,
+      p_desired_subtask_count: data.desiredSubtaskCount ?? null,
+      p_target_duration_minutes: data.targetDurationMinutes ?? null,
+      p_due_date: data.dueDate ?? null,
     });
 
     if (error) throw new Error(`과제 저장 실패: ${error.message}`);

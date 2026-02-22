@@ -12,5 +12,12 @@ export default async function NewTaskPage() {
     redirect("/login");
   }
 
-  return <TaskCreator />;
+  // userContext를 폼 placeholder에 사용
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("user_context")
+    .eq("id", user.id)
+    .single();
+
+  return <TaskCreator userContext={profile?.user_context ?? []} />;
 }

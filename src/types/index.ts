@@ -27,6 +27,19 @@ export interface Task {
   total_actual_minutes: number | null;
   created_at: string;
   completed_at: string | null;
+  memo?: string | null;
+  desired_subtask_count?: number | null;
+  target_duration_minutes?: number | null;
+  due_date?: string | null; // ISO date "YYYY-MM-DD"
+}
+
+// 폼 → 액션 전달용 입력 데이터
+export interface TaskInputData {
+  title: string;
+  memo?: string;
+  desiredSubtaskCount?: number; // undefined = AI 추천
+  targetDurationMinutes?: number; // undefined = AI 추천
+  dueDate?: string; // ISO date "YYYY-MM-DD"
 }
 
 export interface Subtask {
