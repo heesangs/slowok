@@ -28,15 +28,31 @@ export function DashboardContent({
   const [completedOpen, setCompletedOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Optimistic Update를 위한 로컬 상태 — props 변경 시 동기화
+  const [optimisticTasks, setOptimisticTasks] = useState(tasks);
+  useEffect(() => {
+    setOptimisticTasks(tasks);
+  }, [tasks]);
+
   async function handleDelete(taskId: string) {
-    setDeletingId(taskId);
+    // 삭제 대상 저장 (롤백용)
+    const deletedTask = optimisticTasks.find((t) => t.id === taskId);
+
+    // 즉시 UI에서 제거 + toast 표시
+    setOptimisticTasks((prev) => prev.filter((t) => t.id !== taskId));
+    toast("할일을 삭제했습니다.", "success");
+
+    // 백그라운드로 서버 삭제 실행
     const result = await deleteTaskAction(taskId);
-    setDeletingId(null);
 
     if (result.success) {
-      toast("할일을 삭제했습니다.", "success");
+      // 서버 데이터와 최종 동기화
       router.refresh();
     } else {
+      // 실패 시 카드 복원 + 에러 toast
+      if (deletedTask) {
+        setOptimisticTasks((prev) => [...prev, deletedTask]);
+      }
       toast(result.error ?? "삭제 중 오류가 발생했습니다.", "error");
     }
   }
@@ -57,8 +73,8 @@ export function DashboardContent({
     }
   }, [fetchError, toast]);
 
-  // 진행 중/대기 과제와 완료 과제 분리 & 정렬
-  const activeTasks = tasks
+  // 진행 중/대기 과제와 완료 과제 분리 & 정렬 (optimisticTasks 사용)
+  const activeTasks = optimisticTasks
     .filter((t) => t.status !== "completed")
     .sort((a, b) => {
       // in_progress 먼저, 그 다음 pending
@@ -66,14 +82,14 @@ export function DashboardContent({
       if (a.status !== "in_progress" && b.status === "in_progress") return 1;
       return 0;
     });
-  const completedTasks = tasks.filter((t) => t.status === "completed");
+  const completedTasks = optimisticTasks.filter((t) => t.status === "completed");
 
   // 총 예상 시간 계산
-  const totalMinutes = tasks.reduce(
+  const totalMinutes = optimisticTasks.reduce(
     (sum, t) => sum + (t.total_estimated_minutes ?? 0),
     0
   );
-  const totalSubtasks = tasks.reduce(
+  const totalSubtasks = optimisticTasks.reduce(
     (sum, t) => sum + (t.subtasks?.length ?? 0),
     0
   );
@@ -86,8 +102,8 @@ export function DashboardContent({
           안녕, {displayName || "친구"} 👋
         </h1>
           <p className="text-sm text-foreground/60 mt-1">
-          {tasks.length > 0
-            ? `${tasks.length}개 할일, ${totalSubtasks}개 세부 단계, 총 ${formatMinutes(totalMinutes)}`
+          {optimisticTasks.length > 0
+            ? `${optimisticTasks.length}개 할일, ${totalSubtasks}개 세부 단계, 총 ${formatMinutes(totalMinutes)}`
             : "등록된 할일이 없어요"}
         </p>
       </div>
