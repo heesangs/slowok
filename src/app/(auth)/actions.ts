@@ -43,29 +43,24 @@ export async function signInAction(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
     return { error: "이메일 또는 비밀번호가 올바르지 않습니다." };
   }
 
-  // 프로필 존재 여부 확인
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const userId = data.user?.id;
+  if (!userId) {
     return { error: "로그인에 실패했습니다." };
   }
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("id")
-    .eq("id", user.id)
-    .single();
+    .eq("id", userId)
+    .maybeSingle();
 
-  // "row not found" 외 조회 에러는 안내 후 중단
-  if (profileError && profileError.code !== "PGRST116") {
+  if (profileError) {
     return { error: "프로필 확인 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요." };
   }
 

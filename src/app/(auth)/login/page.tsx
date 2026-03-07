@@ -10,17 +10,21 @@ import { useEffect, useState } from "react";
 
 const SAVED_EMAIL_KEY = "slowgoes_saved_email";
 
+function isNextRedirectError(error: unknown): error is Error & { digest: string } {
+  if (typeof error !== "object" || error === null) return false;
+  if (!("digest" in error)) return false;
+  const digest = (error as { digest?: unknown }).digest;
+  return typeof digest === "string" && digest.startsWith("NEXT_REDIRECT");
+}
+
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return localStorage.getItem(SAVED_EMAIL_KEY) ?? "";
+  });
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-
-  // 마운트 시 저장된 이메일 불러오기
-  useEffect(() => {
-    const saved = localStorage.getItem(SAVED_EMAIL_KEY);
-    if (saved) setEmail(saved);
-  }, []);
 
   // 이메일 변경 시 localStorage에 저장
   useEffect(() => {
@@ -40,13 +44,18 @@ export default function LoginPage() {
 
     try {
       const result = await signInAction(formData);
-      // signInAction은 성공 시 redirect하므로 여기 도달하면 에러
       if (result?.error) {
         setError(result.error);
+      } else {
+        setError("로그인 처리 중 문제가 발생했습니다. 다시 시도해주세요.");
       }
-    } catch {
-      // redirect는 에러로 throw되므로 무시
-    } finally {
+      setIsLoading(false);
+    } catch (error) {
+      // redirect 에러는 Next.js가 라우팅을 처리하도록 그대로 전달
+      if (isNextRedirectError(error)) {
+        throw error;
+      }
+      setError("로그인 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
       setIsLoading(false);
     }
   }
