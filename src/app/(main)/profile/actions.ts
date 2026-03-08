@@ -10,6 +10,7 @@ type SelfLevel = (typeof VALID_SELF_LEVELS)[number];
 
 const VALID_USER_CONTEXTS = ["student", "university", "work", "personal"] as const;
 type UserContext = (typeof VALID_USER_CONTEXTS)[number];
+const ACCOUNT_DELETE_CONFIRM_TEXT = "탈퇴합니다";
 
 export async function updateProfileAction(formData: FormData) {
   const displayName = formData.get("display_name") as string;
@@ -124,4 +125,96 @@ export async function changePasswordAction(formData: FormData) {
   }
 
   return { success: true };
+}
+
+function mapDeleteAccountError(error: unknown): string {
+  if (!error || typeof error !== "object") {
+    return "회원탈퇴 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.";
+  }
+
+  const candidate = error as {
+    message?: unknown;
+    status?: unknown;
+    code?: unknown;
+    name?: unknown;
+  };
+
+  const message =
+    typeof candidate.message === "string" ? candidate.message.toLowerCase() : "";
+  const code =
+    typeof candidate.code === "string" ? candidate.code.toLowerCase() : "";
+  const name =
+    typeof candidate.name === "string" ? candidate.name.toLowerCase() : "";
+  const status = typeof candidate.status === "number" ? candidate.status : undefined;
+
+  const hasToken = (...tokens: string[]) =>
+    tokens.some(
+      (token) =>
+        message.includes(token) ||
+        code.includes(token) ||
+        name.includes(token)
+    );
+
+  if (
+    status === 400 &&
+    hasToken("invalid login credentials", "invalid_credentials", "invalid grant")
+  ) {
+    return "비밀번호가 올바르지 않습니다.";
+  }
+
+  if (
+    status === 429 ||
+    hasToken("too many requests", "rate limit", "over_request_rate_limit")
+  ) {
+    return "요청이 많아 잠시 제한되었어요. 잠시 후 다시 시도해주세요.";
+  }
+
+  if (typeof status === "number" && status >= 500) {
+    return "서버 오류로 회원탈퇴에 실패했습니다. 잠시 후 다시 시도해주세요.";
+  }
+
+  return "회원탈퇴 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.";
+}
+
+export async function deleteAccountAction(formData: FormData) {
+  const password = formData.get("password") as string;
+  const confirmText = formData.get("confirm_text") as string;
+
+  if (!password) {
+    return { success: false, error: "비밀번호를 입력해주세요." };
+  }
+
+  if (confirmText !== ACCOUNT_DELETE_CONFIRM_TEXT) {
+    return {
+      success: false,
+      error: `확인 문구를 정확히 입력해주세요. (${ACCOUNT_DELETE_CONFIRM_TEXT})`,
+    };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user || !user.email) {
+    redirect("/login");
+  }
+
+  const { error: reauthError } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password,
+  });
+
+  if (reauthError) {
+    return { success: false, error: mapDeleteAccountError(reauthError) };
+  }
+
+  const { error: deleteError } = await supabase.rpc("delete_my_account");
+  if (deleteError) {
+    return { success: false, error: mapDeleteAccountError(deleteError) };
+  }
+
+  await supabase.auth.signOut();
+  redirect("/login?deleted=1");
 }

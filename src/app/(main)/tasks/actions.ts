@@ -4,8 +4,25 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { analyzeTask, decomposeSubtask } from "@/lib/ai/analyze";
-import type { AISubtaskSuggestion, EditableSubtask, MemoTemplate, Profile, TaskInputData } from "@/types";
+import {
+  adjustPacePlan,
+  analyzeLifeScene,
+  analyzeTask,
+  decomposeSubtask,
+  generateFirstStep,
+} from "@/lib/ai/analyze";
+import type {
+  AISubtaskSuggestion,
+  EditableSubtask,
+  FirstStepPlanResult,
+  Gender,
+  LifeSceneAnalysisResult,
+  MemoTemplate,
+  PaceAdjustOption,
+  PersonalityType,
+  Profile,
+  TaskInputData,
+} from "@/types";
 
 // 인증된 사용자 ID 반환 (미인증 시 에러)
 async function getAuthUserId() {
@@ -115,6 +132,186 @@ export async function analyzeTaskAction(data: TaskInputData): Promise<{
     return {
       success: false,
       error: toClientErrorMessage(error, "분석 중 오류가 발생했습니다."),
+    };
+  }
+}
+
+/**
+ * 삶의 장면 분석 — 영역 분류 + 시간 지평(온보딩 Step 3)
+ */
+export async function analyzeLifeSceneAction(data: {
+  sceneText: string;
+  age: number;
+  gender: Gender;
+  personalityType: PersonalityType;
+}): Promise<{
+  success: boolean;
+  data?: LifeSceneAnalysisResult;
+  error?: string;
+}> {
+  try {
+    await getAuthUserId();
+
+    const sceneText = data.sceneText?.trim();
+    if (!sceneText) {
+      throw new Error("삶의 장면을 입력해주세요.");
+    }
+    if (!Number.isFinite(data.age) || data.age < 0 || data.age > 100) {
+      throw new Error("나이 값이 올바르지 않습니다.");
+    }
+    if (!["male", "female"].includes(data.gender)) {
+      throw new Error("성별 값이 올바르지 않습니다.");
+    }
+    if (!["IT", "IF", "ET", "EF"].includes(data.personalityType)) {
+      throw new Error("성향 값이 올바르지 않습니다.");
+    }
+
+    const analysis = await analyzeLifeScene({
+      sceneText,
+      age: data.age,
+      gender: data.gender,
+      personalityType: data.personalityType,
+    });
+
+    return { success: true, data: analysis };
+  } catch (error) {
+    return {
+      success: false,
+      error: toClientErrorMessage(error, "삶의 장면 분석 중 오류가 발생했습니다."),
+    };
+  }
+}
+
+/**
+ * 첫 실행안 생성 — 이번 주 행동을 세부 단계로 구체화 (온보딩 Step 4)
+ */
+export async function generateFirstStepAction(data: {
+  weeklyAction: string;
+  sceneText: string;
+  lifeArea: string;
+  age: number;
+  gender: Gender;
+  personalityType: PersonalityType;
+}): Promise<{
+  success: boolean;
+  data?: FirstStepPlanResult;
+  error?: string;
+}> {
+  try {
+    await getAuthUserId();
+
+    const weeklyAction = data.weeklyAction?.trim();
+    const sceneText = data.sceneText?.trim();
+    const lifeArea = data.lifeArea?.trim();
+
+    if (!weeklyAction) {
+      throw new Error("이번 주 행동을 선택해주세요.");
+    }
+    if (!sceneText) {
+      throw new Error("삶의 장면이 비어 있습니다.");
+    }
+    if (!lifeArea) {
+      throw new Error("삶의 영역 정보가 비어 있습니다.");
+    }
+    if (!Number.isFinite(data.age) || data.age < 0 || data.age > 100) {
+      throw new Error("나이 값이 올바르지 않습니다.");
+    }
+    if (!["male", "female"].includes(data.gender)) {
+      throw new Error("성별 값이 올바르지 않습니다.");
+    }
+    if (!["IT", "IF", "ET", "EF"].includes(data.personalityType)) {
+      throw new Error("성향 값이 올바르지 않습니다.");
+    }
+
+    const plan = await generateFirstStep({
+      weeklyAction,
+      sceneText,
+      lifeArea,
+      age: data.age,
+      gender: data.gender,
+      personalityType: data.personalityType,
+    });
+
+    return { success: true, data: plan };
+  } catch (error) {
+    return {
+      success: false,
+      error: toClientErrorMessage(error, "첫 실행안 생성 중 오류가 발생했습니다."),
+    };
+  }
+}
+
+/**
+ * 페이스 조정 — "더 구체적으로" 옵션만 AI 재호출
+ */
+export async function adjustPaceAction(data: {
+  option: PaceAdjustOption;
+  weeklyAction: string;
+  sceneText: string;
+  lifeArea: string;
+  age: number;
+  gender: Gender;
+  personalityType: PersonalityType;
+  currentPlan: FirstStepPlanResult;
+}): Promise<{
+  success: boolean;
+  data?: FirstStepPlanResult;
+  error?: string;
+}> {
+  try {
+    await getAuthUserId();
+
+    const option = data.option;
+    const weeklyAction = data.weeklyAction?.trim();
+    const sceneText = data.sceneText?.trim();
+    const lifeArea = data.lifeArea?.trim();
+
+    if (!["lighter", "more_specific", "once_per_week", "start_this_week", "start_today"].includes(option)) {
+      throw new Error("페이스 옵션 값이 올바르지 않습니다.");
+    }
+    if (!weeklyAction) {
+      throw new Error("이번 주 행동을 선택해주세요.");
+    }
+    if (!sceneText) {
+      throw new Error("삶의 장면이 비어 있습니다.");
+    }
+    if (!lifeArea) {
+      throw new Error("삶의 영역 정보가 비어 있습니다.");
+    }
+    if (!Number.isFinite(data.age) || data.age < 0 || data.age > 100) {
+      throw new Error("나이 값이 올바르지 않습니다.");
+    }
+    if (!["male", "female"].includes(data.gender)) {
+      throw new Error("성별 값이 올바르지 않습니다.");
+    }
+    if (!["IT", "IF", "ET", "EF"].includes(data.personalityType)) {
+      throw new Error("성향 값이 올바르지 않습니다.");
+    }
+    if (!data.currentPlan || !Array.isArray(data.currentPlan.subtasks)) {
+      throw new Error("현재 실행안 정보가 올바르지 않습니다.");
+    }
+
+    // 프론트엔드 우선 처리 정책: 더 구체적으로만 AI 재호출
+    if (option !== "more_specific") {
+      return { success: true, data: data.currentPlan };
+    }
+
+    const adjustedPlan = await adjustPacePlan({
+      option,
+      weeklyAction,
+      sceneText,
+      lifeArea,
+      age: data.age,
+      gender: data.gender,
+      personalityType: data.personalityType,
+      currentPlan: data.currentPlan,
+    });
+
+    return { success: true, data: adjustedPlan };
+  } catch (error) {
+    return {
+      success: false,
+      error: toClientErrorMessage(error, "페이스 조정 중 오류가 발생했습니다."),
     };
   }
 }

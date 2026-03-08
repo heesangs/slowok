@@ -65,6 +65,12 @@ export function TaskCard({ task, onDelete, isDeleting }: TaskCardProps) {
               {task.title}
             </h3>
 
+            {task.bucket?.title && (
+              <p className="text-xs text-foreground/60 mt-1.5">
+                이 일은 &apos;{task.bucket.title}&apos;라는 삶의 장면과 연결돼 있어요.
+              </p>
+            )}
+
             {/* 난이도 뱃지 */}
             {totalCount > 0 && (
               <div className="flex items-center gap-2 mt-2">

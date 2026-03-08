@@ -26,7 +26,6 @@ export function DashboardContent({
   const searchParams = useSearchParams();
   const router = useRouter();
   const [completedOpen, setCompletedOpen] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Optimistic Update를 위한 로컬 상태 — props 변경 시 동기화
   const [optimisticTasks, setOptimisticTasks] = useState(tasks);
@@ -62,6 +61,12 @@ export function DashboardContent({
     if (searchParams.get("saved") === "1") {
       toast("저장되었습니다 ✓", "success");
       // URL에서 쿼리 파라미터 제거
+      window.history.replaceState(null, "", "/dashboard");
+      return;
+    }
+
+    if (searchParams.get("onboarding_saved") === "1") {
+      toast("첫 한 걸음이 준비되었어요 ✨", "success");
       window.history.replaceState(null, "", "/dashboard");
     }
   }, [searchParams, toast]);
@@ -120,7 +125,7 @@ export function DashboardContent({
                 key={task.id}
                 task={task}
                 onDelete={() => handleDelete(task.id)}
-                isDeleting={deletingId === task.id}
+                isDeleting={false}
               />
             ))}
           </div>
@@ -152,7 +157,7 @@ export function DashboardContent({
                   key={task.id}
                   task={task}
                   onDelete={() => handleDelete(task.id)}
-                  isDeleting={deletingId === task.id}
+                  isDeleting={false}
                 />
               ))}
             </div>

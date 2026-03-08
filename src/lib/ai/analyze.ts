@@ -1,7 +1,25 @@
 // AI 할 일 분석 — Gemini API로 하위 과제 분해, 난이도/시간 제안
 
 import { geminiModel } from "./gemini";
-import type { AISubtaskSuggestion, Profile } from "@/types";
+import type {
+  AISubtaskSuggestion,
+  Difficulty,
+  FirstStepPlanResult,
+  Gender,
+  HorizonAction,
+  LifeSceneAnalysisResult,
+  PaceAdjustOption,
+  PersonalityType,
+  Profile,
+} from "@/types";
+
+const LIFE_AREA_OPTIONS = ["건강", "관계", "성장", "경험", "일", "돈", "내면"] as const;
+const HORIZON_LABELS: Record<HorizonAction["level"], string> = {
+  someday: "언젠가",
+  this_year: "1년 안",
+  this_season: "이번 시즌",
+  this_week: "이번 주",
+};
 
 // 기존 학생 학년 여부 판별 (legacy 유저 호환)
 function isLegacyStudentGrade(grade: string | null | undefined): boolean {
@@ -124,6 +142,195 @@ function mapGeminiError(error: unknown): Error {
   return new Error("AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
 }
 
+function normalizeLifeArea(raw: unknown, sceneText: string): string {
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (LIFE_AREA_OPTIONS.includes(trimmed as (typeof LIFE_AREA_OPTIONS)[number])) {
+      return trimmed;
+    }
+
+    const englishToKorean: Record<string, string> = {
+      health: "건강",
+      relationship: "관계",
+      relationships: "관계",
+      growth: "성장",
+      experience: "경험",
+      experiences: "경험",
+      work: "일",
+      career: "일",
+      money: "돈",
+      finance: "돈",
+      inner: "내면",
+      mind: "내면",
+    };
+    const mapped = englishToKorean[trimmed.toLowerCase()];
+    if (mapped) return mapped;
+  }
+
+  const lower = sceneText.toLowerCase();
+  if (lower.includes("돈") || lower.includes("재테크") || lower.includes("경제")) return "돈";
+  if (lower.includes("운동") || lower.includes("수면") || lower.includes("건강")) return "건강";
+  if (lower.includes("결혼") || lower.includes("가족") || lower.includes("친구")) return "관계";
+  if (lower.includes("여행") || lower.includes("경험")) return "경험";
+  if (lower.includes("일") || lower.includes("커리어") || lower.includes("직장")) return "일";
+  if (lower.includes("마음") || lower.includes("명상") || lower.includes("심리")) return "내면";
+  return "성장";
+}
+
+function normalizeHorizonLevel(raw: unknown): HorizonAction["level"] | null {
+  if (typeof raw !== "string") return null;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "someday" || normalized === "this_year" || normalized === "this_season" || normalized === "this_week") {
+    return normalized;
+  }
+
+  if (normalized === "year" || normalized === "one_year" || normalized === "within_year") {
+    return "this_year";
+  }
+  if (normalized === "season" || normalized === "thisseason") {
+    return "this_season";
+  }
+  if (normalized === "week" || normalized === "thisweek") {
+    return "this_week";
+  }
+  if (normalized.includes("언젠")) return "someday";
+  if (normalized.includes("1년")) return "this_year";
+  if (normalized.includes("시즌")) return "this_season";
+  if (normalized.includes("이번 주")) return "this_week";
+  return null;
+}
+
+function toNonEmptyText(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeDifficulty(raw: unknown, fallback: Difficulty = "medium"): Difficulty {
+  if (raw === "easy" || raw === "medium" || raw === "hard") return raw;
+  if (typeof raw === "string") {
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === "쉬움") return "easy";
+    if (normalized === "보통") return "medium";
+    if (normalized === "어려움") return "hard";
+  }
+  return fallback;
+}
+
+function normalizeEstimatedMinutes(raw: unknown, min: number, max: number, fallback: number) {
+  return Math.max(min, Math.min(max, Math.round(Number(raw) || fallback)));
+}
+
+function normalizeAISubtasks(
+  rawSubtasks: unknown,
+  options: { minMinutes: number; maxMinutes: number; fallbackMinutes: number; fallbackTitlePrefix: string }
+): AISubtaskSuggestion[] {
+  if (!Array.isArray(rawSubtasks) || rawSubtasks.length === 0) return [];
+
+  return rawSubtasks
+    .map((item, index) => {
+      const row = item as {
+        title?: unknown;
+        difficulty?: unknown;
+        estimated_minutes?: unknown;
+        estimatedMinutes?: unknown;
+      };
+      const title = toNonEmptyText(row.title) ?? `${options.fallbackTitlePrefix} ${index + 1}`;
+      const difficulty = normalizeDifficulty(row.difficulty, "medium");
+      const estimated_minutes = normalizeEstimatedMinutes(
+        row.estimated_minutes ?? row.estimatedMinutes,
+        options.minMinutes,
+        options.maxMinutes,
+        options.fallbackMinutes
+      );
+      return { title, difficulty, estimated_minutes };
+    })
+    .filter((item) => item.title.length > 0);
+}
+
+function buildFallbackHorizons(sceneText: string): HorizonAction[] {
+  const root = sceneText.trim();
+  const someday = root;
+  const thisYear = `${root}를 위한 기반을 만들어보기`;
+  const thisSeason = `${root}를 위한 루틴을 시작해보기`;
+  const thisWeek1 = `${root} 관련해서 바로 시작할 수 있는 정보 1개 찾아보기`;
+  const thisWeek2 = `${root}를 위해 이번 주에 할 수 있는 가장 작은 행동 1개 정하기`;
+
+  return [
+    { level: "someday", label: HORIZON_LABELS.someday, action: someday },
+    { level: "this_year", label: HORIZON_LABELS.this_year, action: thisYear },
+    { level: "this_season", label: HORIZON_LABELS.this_season, action: thisSeason },
+    { level: "this_week", label: HORIZON_LABELS.this_week, action: thisWeek1 },
+    { level: "this_week", label: HORIZON_LABELS.this_week, action: thisWeek2 },
+  ];
+}
+
+function normalizeHorizons(rawHorizons: unknown, sceneText: string): HorizonAction[] {
+  if (!Array.isArray(rawHorizons)) {
+    return buildFallbackHorizons(sceneText);
+  }
+
+  const bucket: Record<HorizonAction["level"], string[]> = {
+    someday: [],
+    this_year: [],
+    this_season: [],
+    this_week: [],
+  };
+
+  for (const row of rawHorizons) {
+    const item = row as { level?: unknown; label?: unknown; action?: unknown };
+    const level = normalizeHorizonLevel(item.level ?? item.label);
+    if (!level) continue;
+    const action = toNonEmptyText(item.action);
+    if (!action) continue;
+    bucket[level].push(action);
+  }
+
+  const fallback = buildFallbackHorizons(sceneText);
+  if (bucket.someday.length === 0) bucket.someday.push(fallback[0].action);
+  if (bucket.this_year.length === 0) bucket.this_year.push(fallback[1].action);
+  if (bucket.this_season.length === 0) bucket.this_season.push(fallback[2].action);
+
+  const weekCandidates = bucket.this_week.filter(Boolean);
+  if (weekCandidates.length === 0) {
+    weekCandidates.push(fallback[3].action, fallback[4].action);
+  } else if (weekCandidates.length === 1) {
+    weekCandidates.push(fallback[4].action);
+  }
+
+  return [
+    { level: "someday", label: HORIZON_LABELS.someday, action: bucket.someday[0] },
+    { level: "this_year", label: HORIZON_LABELS.this_year, action: bucket.this_year[0] },
+    { level: "this_season", label: HORIZON_LABELS.this_season, action: bucket.this_season[0] },
+    ...weekCandidates.slice(0, 3).map((action) => ({
+      level: "this_week" as const,
+      label: HORIZON_LABELS.this_week,
+      action,
+    })),
+  ];
+}
+
+interface AnalyzeLifeSceneInput {
+  sceneText: string;
+  age: number;
+  gender: Gender;
+  personalityType: PersonalityType;
+}
+
+interface GenerateFirstStepInput {
+  weeklyAction: string;
+  sceneText: string;
+  lifeArea: string;
+  age: number;
+  gender: Gender;
+  personalityType: PersonalityType;
+}
+
+interface AdjustPacePlanInput extends GenerateFirstStepInput {
+  option: PaceAdjustOption;
+  currentPlan: FirstStepPlanResult;
+}
+
 // AI 분석 힌트 (선택 컨텍스트)
 interface TaskAnalysisHints {
   memo?: string;
@@ -199,6 +406,303 @@ ${hintsBlock ? hintsBlock + "\n" : ""}
     difficulty: (["easy", "medium", "hard"].includes(item.difficulty) ? item.difficulty : "medium") as AISubtaskSuggestion["difficulty"],
     estimated_minutes: Math.max(5, Math.min(120, Math.round(Number(item.estimated_minutes) || 15))),
   }));
+}
+
+/**
+ * 삶의 장면을 영역 + 시간 지평으로 분석 (온보딩 Step 3)
+ */
+export async function analyzeLifeScene(
+  input: AnalyzeLifeSceneInput
+): Promise<LifeSceneAnalysisResult> {
+  const sceneText = input.sceneText.trim();
+  if (!sceneText) {
+    throw new Error("삶의 장면을 입력해주세요.");
+  }
+  if (!Number.isFinite(input.age) || input.age < 0 || input.age > 100) {
+    throw new Error("나이 값이 올바르지 않습니다.");
+  }
+
+  const prompt = `당신은 slowgoes 앱의 온보딩 AI 코치입니다.
+사용자의 삶의 장면을 다음 2가지를 동시에 생성하세요.
+
+1) 삶의 영역 분류 (건강/관계/성장/경험/일/돈/내면 중 1개)
+2) 시간 지평 액션 분해
+- 언젠가 1개
+- 1년 안 1개
+- 이번 시즌 1개
+- 이번 주 2~3개 (실행 가능한 아주 작은 행동)
+
+사용자 정보:
+- 나이: ${input.age}
+- 성별: ${input.gender}
+- 성향: ${input.personalityType}
+- 삶의 장면: "${sceneText}"
+
+규칙:
+- 문장은 한국어로 작성
+- 공감 메시지는 짧고 따뜻하게 1문장
+- 이번 주 항목은 바로 시작 가능한 행동으로 제안
+- 추상적인 표현보다 구체적인 행동으로 작성
+
+아래 JSON 객체만 응답하세요:
+{
+  "lifeArea": "건강|관계|성장|경험|일|돈|내면",
+  "empathyMessage": "공감 메시지",
+  "horizons": [
+    { "level": "someday", "label": "언젠가", "action": "..." },
+    { "level": "this_year", "label": "1년 안", "action": "..." },
+    { "level": "this_season", "label": "이번 시즌", "action": "..." },
+    { "level": "this_week", "label": "이번 주", "action": "..." },
+    { "level": "this_week", "label": "이번 주", "action": "..." }
+  ]
+}`;
+
+  let parsed: unknown;
+  try {
+    const result = await geminiModel.generateContent(prompt);
+    parsed = parseJsonResponse(result.response.text());
+  } catch (error) {
+    throw mapGeminiError(error);
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("AI 응답이 올바르지 않습니다.");
+  }
+
+  const object = parsed as {
+    lifeArea?: unknown;
+    empathyMessage?: unknown;
+    horizons?: unknown;
+  };
+
+  const lifeArea = normalizeLifeArea(object.lifeArea, sceneText);
+  const empathyMessage =
+    toNonEmptyText(object.empathyMessage) ?? `${lifeArea}에 대한 장면이네요, 멋져요.`;
+  const horizons = normalizeHorizons(object.horizons, sceneText);
+
+  return {
+    lifeArea,
+    empathyMessage,
+    horizons,
+  };
+}
+
+/**
+ * 선택한 이번 주 행동을 첫 실행안으로 구체화 (온보딩 Step 4)
+ */
+export async function generateFirstStep(
+  input: GenerateFirstStepInput
+): Promise<FirstStepPlanResult> {
+  const weeklyAction = input.weeklyAction.trim();
+  const sceneText = input.sceneText.trim();
+  const lifeArea = input.lifeArea.trim();
+
+  if (!weeklyAction) {
+    throw new Error("이번 주 행동이 비어 있습니다.");
+  }
+  if (!sceneText) {
+    throw new Error("삶의 장면이 비어 있습니다.");
+  }
+  if (!Number.isFinite(input.age) || input.age < 0 || input.age > 100) {
+    throw new Error("나이 값이 올바르지 않습니다.");
+  }
+
+  const prompt = `당신은 slowgoes 앱의 실행 코치입니다.
+사용자의 '이번 주 한 걸음'을 바로 실행 가능한 세부 단계로 나눠주세요.
+
+사용자 정보:
+- 나이: ${input.age}
+- 성별: ${input.gender}
+- 성향: ${input.personalityType}
+- 삶의 영역: ${lifeArea || "미정"}
+- 삶의 장면: "${sceneText}"
+- 이번 주 한 걸음: "${weeklyAction}"
+
+규칙:
+- 하위 단계는 2~4개
+- 각 단계는 5~40분 사이
+- 지나치게 추상적인 문장 금지, 즉시 실행 가능한 문장으로 작성
+- 전체 난이도는 easy|medium|hard 중 하나
+- 전체 예상 시간은 하위 단계 합에 맞춰 현실적으로 제시
+- 한국어로 작성
+
+아래 JSON 객체만 응답하세요:
+{
+  "estimatedMinutes": 숫자,
+  "difficulty": "easy|medium|hard",
+  "subtasks": [
+    { "title": "단계 제목", "difficulty": "easy|medium|hard", "estimated_minutes": 숫자 }
+  ]
+}`;
+
+  let parsed: unknown;
+  try {
+    const result = await geminiModel.generateContent(prompt);
+    parsed = parseJsonResponse(result.response.text());
+  } catch (error) {
+    throw mapGeminiError(error);
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("AI 응답이 올바르지 않습니다.");
+  }
+
+  const row = parsed as {
+    estimatedMinutes?: unknown;
+    estimated_minutes?: unknown;
+    difficulty?: unknown;
+    subtasks?: unknown;
+  };
+
+  let subtasks = normalizeAISubtasks(row.subtasks, {
+    minMinutes: 5,
+    maxMinutes: 40,
+    fallbackMinutes: 10,
+    fallbackTitlePrefix: "실행 단계",
+  });
+
+  if (subtasks.length === 0) {
+    subtasks = [
+      { title: `${weeklyAction} 관련 정보 1개 찾기`, difficulty: "easy", estimated_minutes: 5 },
+      { title: `${weeklyAction} 바로 시작할 행동 1개 정하기`, difficulty: "easy", estimated_minutes: 10 },
+    ];
+  }
+
+  const estimatedFromSubtasks = subtasks.reduce((sum, item) => sum + item.estimated_minutes, 0);
+  const estimatedMinutes = normalizeEstimatedMinutes(
+    row.estimatedMinutes ?? row.estimated_minutes ?? estimatedFromSubtasks,
+    5,
+    180,
+    estimatedFromSubtasks
+  );
+
+  const difficulty = normalizeDifficulty(row.difficulty, "medium");
+
+  return {
+    estimatedMinutes,
+    difficulty,
+    subtasks,
+  };
+}
+
+/**
+ * 페이스 조정 (Step 4) — 현재는 "더 구체적으로" 선택 시에만 AI 재호출
+ */
+export async function adjustPacePlan(
+  input: AdjustPacePlanInput
+): Promise<FirstStepPlanResult> {
+  if (input.option !== "more_specific") {
+    return input.currentPlan;
+  }
+
+  const weeklyAction = input.weeklyAction.trim();
+  const sceneText = input.sceneText.trim();
+  const lifeArea = input.lifeArea.trim();
+
+  if (!weeklyAction) {
+    throw new Error("이번 주 행동이 비어 있습니다.");
+  }
+  if (!sceneText) {
+    throw new Error("삶의 장면이 비어 있습니다.");
+  }
+  if (!Number.isFinite(input.age) || input.age < 0 || input.age > 100) {
+    throw new Error("나이 값이 올바르지 않습니다.");
+  }
+
+  const currentSubtasks = input.currentPlan.subtasks
+    .map((subtask, index) =>
+      `${index + 1}. ${subtask.title} (${subtask.estimated_minutes}분, ${subtask.difficulty})`
+    )
+    .join("\n");
+
+  const prompt = `당신은 slowgoes 앱의 실행 코치입니다.
+사용자가 이미 만든 실행안을 "더 구체적으로" 조정하고 싶어합니다.
+현재 실행안을 유지하면서 더 세분화된 단계로 바꿔주세요.
+
+사용자 정보:
+- 나이: ${input.age}
+- 성별: ${input.gender}
+- 성향: ${input.personalityType}
+- 삶의 영역: ${lifeArea || "미정"}
+- 삶의 장면: "${sceneText}"
+- 이번 주 한 걸음: "${weeklyAction}"
+
+현재 실행안:
+${currentSubtasks || "(세부 단계 없음)"}
+
+규칙:
+- 기존 의도는 유지하고, 단계만 더 구체적으로 나눌 것
+- 하위 단계는 3~6개
+- 각 단계는 5~30분 사이
+- 전체 난이도는 easy|medium|hard 중 하나
+- 한국어로 작성
+
+아래 JSON 객체만 응답하세요:
+{
+  "estimatedMinutes": 숫자,
+  "difficulty": "easy|medium|hard",
+  "subtasks": [
+    { "title": "단계 제목", "difficulty": "easy|medium|hard", "estimated_minutes": 숫자 }
+  ]
+}`;
+
+  let parsed: unknown;
+  try {
+    const result = await geminiModel.generateContent(prompt);
+    parsed = parseJsonResponse(result.response.text());
+  } catch (error) {
+    throw mapGeminiError(error);
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("AI 응답이 올바르지 않습니다.");
+  }
+
+  const row = parsed as {
+    estimatedMinutes?: unknown;
+    estimated_minutes?: unknown;
+    difficulty?: unknown;
+    subtasks?: unknown;
+  };
+
+  let subtasks = normalizeAISubtasks(row.subtasks, {
+    minMinutes: 5,
+    maxMinutes: 30,
+    fallbackMinutes: 10,
+    fallbackTitlePrefix: "실행 단계",
+  });
+
+  // "더 구체적으로" 요청인데 단계가 줄어드는 경우를 방지하기 위한 최소 보정
+  if (subtasks.length <= input.currentPlan.subtasks.length) {
+    const fallbackSubtasks: AISubtaskSuggestion[] = [
+      {
+        title: `${weeklyAction} 시작 전 체크리스트 1개 작성하기`,
+        difficulty: "easy",
+        estimated_minutes: 5,
+      },
+      ...input.currentPlan.subtasks.map((item) => ({
+        title: item.title,
+        difficulty: item.difficulty,
+        estimated_minutes: normalizeEstimatedMinutes(item.estimated_minutes, 5, 30, 10),
+      })),
+    ];
+    subtasks = fallbackSubtasks.slice(0, 6);
+  }
+
+  const estimatedFromSubtasks = subtasks.reduce((sum, item) => sum + item.estimated_minutes, 0);
+  const estimatedMinutes = normalizeEstimatedMinutes(
+    row.estimatedMinutes ?? row.estimated_minutes ?? estimatedFromSubtasks,
+    5,
+    180,
+    estimatedFromSubtasks
+  );
+  const difficulty = normalizeDifficulty(row.difficulty, input.currentPlan.difficulty);
+
+  return {
+    estimatedMinutes,
+    difficulty,
+    subtasks,
+  };
 }
 
 /**

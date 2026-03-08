@@ -31,9 +31,9 @@ export default async function OnboardingPage() {
     <div className="flex min-h-dvh items-center justify-center px-4 py-8">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold mb-2">프로필 설정</h1>
+          <h1 className="text-2xl font-bold mb-2">탐색 시작</h1>
           <p className="text-sm text-foreground/60">
-            나에게 맞는 공부 속도를 찾아볼게요
+            내 시간과 리듬을 먼저 살펴볼게요
           </p>
         </div>
 

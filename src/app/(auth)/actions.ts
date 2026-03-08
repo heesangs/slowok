@@ -4,12 +4,25 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import type {
+  OnboardingV2SavePayload,
+  PaceType,
+  PersonalityType,
+  Gender,
+} from "@/types";
 
 const VALID_SELF_LEVELS = ["low", "medium", "high"] as const;
 type SelfLevel = (typeof VALID_SELF_LEVELS)[number];
 
 const VALID_USER_CONTEXTS = ["student", "university", "work", "personal"] as const;
 type UserContext = (typeof VALID_USER_CONTEXTS)[number];
+const VALID_GENDERS = ["male", "female"] as const;
+const VALID_PERSONALITY_TYPES = ["IT", "IF", "ET", "EF"] as const;
+const VALID_PACE_TYPES = ["slow", "balanced", "focused", "recovery"] as const;
+
+type ProfileGender = (typeof VALID_GENDERS)[number];
+type ProfilePersonality = (typeof VALID_PERSONALITY_TYPES)[number];
+type ProfilePaceType = (typeof VALID_PACE_TYPES)[number];
 
 function mapSignInError(error: unknown): string {
   if (!error || typeof error !== "object") {
@@ -105,7 +118,21 @@ export async function signUpAction(formData: FormData) {
 
   // 이메일 인증이 필요한 설정이면 즉시 세션이 생기지 않는다.
   if (!data.session) {
-    return { message: "인증 메일을 보냈어요. 메일 확인 후 로그인해주세요." };
+    const identities = data.user?.identities;
+    const isLikelyExistingUser =
+      Array.isArray(identities) && identities.length === 0;
+
+    if (isLikelyExistingUser) {
+      return {
+        message:
+          "이미 가입된 이메일일 수 있어요. 로그인하거나 비밀번호 재설정을 이용해주세요.",
+      };
+    }
+
+    return {
+      message:
+        "인증 메일을 보냈어요. 메일함(스팸함 포함)을 확인해주세요. 이미 가입된 이메일이라면 메일이 오지 않을 수 있어요.",
+    };
   }
 
   redirect("/onboarding");
@@ -239,4 +266,118 @@ export async function saveProfileAction(formData: FormData) {
   }
 
   redirect("/dashboard");
+}
+
+export async function saveOnboardingV2Action(
+  data: OnboardingV2SavePayload & {
+    displayName?: string;
+    selfLevel: SelfLevel;
+    userContext?: UserContext[];
+    grade?: string | null;
+    subjects?: string[];
+    chapterTitle?: string;
+  }
+) {
+  const sceneText = data.sceneText?.trim();
+  const selectedWeeklyAction = data.selectedWeeklyAction?.trim();
+  const lifeArea = data.lifeArea?.trim();
+  const displayName = data.displayName?.trim() || "slowgoes 사용자";
+  const chapterTitle =
+    data.chapterTitle?.trim() || `${sceneText || "삶의 장면"} 이번 시즌 실행`;
+
+  if (!displayName) {
+    return { error: "닉네임을 올바르게 입력해주세요." };
+  }
+  if (!sceneText) {
+    return { error: "삶의 장면이 비어 있습니다." };
+  }
+  if (!selectedWeeklyAction) {
+    return { error: "이번 주에 시작할 한 걸음을 선택해주세요." };
+  }
+  if (!lifeArea) {
+    return { error: "삶의 영역 정보가 비어 있습니다." };
+  }
+  if (!Number.isFinite(data.age) || data.age < 0 || data.age > 100) {
+    return { error: "나이 값이 올바르지 않습니다." };
+  }
+  if (!VALID_GENDERS.includes(data.gender as ProfileGender)) {
+    return { error: "성별 값이 올바르지 않습니다." };
+  }
+  if (!VALID_PERSONALITY_TYPES.includes(data.personalityType as ProfilePersonality)) {
+    return { error: "성향 값이 올바르지 않습니다." };
+  }
+  if (!VALID_PACE_TYPES.includes(data.paceType as ProfilePaceType)) {
+    return { error: "페이스 값이 올바르지 않습니다." };
+  }
+  if (!VALID_SELF_LEVELS.includes(data.selfLevel)) {
+    return { error: "속도 값이 올바르지 않습니다." };
+  }
+
+  const normalizedUserContext = (data.userContext ?? ["personal"]).filter((ctx, index, arr) =>
+    VALID_USER_CONTEXTS.includes(ctx) && arr.indexOf(ctx) === index
+  );
+  if (normalizedUserContext.length === 0) {
+    normalizedUserContext.push("personal");
+  }
+
+  const normalizedSubjects = [...new Set(
+    (data.subjects ?? [])
+      .map((subject) => subject.trim())
+      .filter((subject) => subject.length > 0)
+  )];
+
+  const normalizedSubtasks = data.plan.subtasks
+    .map((subtask) => ({
+      title: subtask.title.trim(),
+      difficulty: subtask.difficulty,
+      estimated_minutes: Math.max(5, Math.min(120, Math.round(subtask.estimated_minutes || 10))),
+    }))
+    .filter((subtask) => subtask.title.length > 0);
+
+  if (normalizedSubtasks.length === 0) {
+    return { error: "세부 단계가 비어 있습니다." };
+  }
+
+  const totalEstimatedMinutes = Math.max(
+    5,
+    Math.round(
+      Number.isFinite(data.plan.estimatedMinutes)
+        ? data.plan.estimatedMinutes
+        : normalizedSubtasks.reduce((sum, subtask) => sum + subtask.estimated_minutes, 0)
+    )
+  );
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const { error } = await supabase.rpc("save_onboarding_data", {
+    p_user_id: user.id,
+    p_display_name: displayName,
+    p_self_level: data.selfLevel,
+    p_user_context: normalizedUserContext,
+    p_grade: data.grade?.trim() || null,
+    p_subjects: normalizedSubjects,
+    p_life_clock_age: data.age,
+    p_gender: data.gender as Gender,
+    p_personality_type: data.personalityType as PersonalityType,
+    p_pace_type: data.paceType as PaceType,
+    p_scene_text: sceneText,
+    p_life_area_name: lifeArea,
+    p_chapter_title: chapterTitle,
+    p_task_title: selectedWeeklyAction,
+    p_total_estimated_minutes: totalEstimatedMinutes,
+    p_subtasks: normalizedSubtasks,
+  });
+
+  if (error) {
+    return { error: "온보딩 저장에 실패했습니다. 다시 시도해주세요." };
+  }
+
+  redirect("/dashboard?onboarding_saved=1");
 }

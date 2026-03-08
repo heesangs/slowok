@@ -7,7 +7,11 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
-import { updateProfileAction, changePasswordAction } from "@/app/(main)/profile/actions";
+import {
+  updateProfileAction,
+  changePasswordAction,
+  deleteAccountAction,
+} from "@/app/(main)/profile/actions";
 import { signOutAction } from "@/app/(auth)/actions";
 import { cn } from "@/lib/utils";
 import { TaskStatsSection } from "@/components/profile/task-stats";
@@ -38,6 +42,7 @@ const SELF_LEVELS = [
   { value: "medium", label: "보통", emoji: "\uD83D\uDEB6", description: "적당한 속도로" },
   { value: "high", label: "빠른 편", emoji: "\uD83D\uDE80", description: "빠르게, 효율적으로" },
 ] as const;
+const ACCOUNT_DELETE_CONFIRM_TEXT = "탈퇴합니다";
 
 interface ProfileContentProps {
   profile: Profile;
@@ -64,6 +69,10 @@ export function ProfileContent({ profile, email, stats }: ProfileContentProps) {
 
   // 로그아웃 상태
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [showDeleteForm, setShowDeleteForm] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   // 함께한 일수 계산
   const daysSinceJoined = Math.max(
@@ -157,6 +166,34 @@ export function ProfileContent({ profile, email, stats }: ProfileContentProps) {
       await signOutAction();
     } catch {
       // redirect는 에러로 throw되므로 무시
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (!deletePassword) {
+      toast("비밀번호를 입력해주세요.", "error");
+      return;
+    }
+
+    if (deleteConfirmText !== ACCOUNT_DELETE_CONFIRM_TEXT) {
+      toast(`확인 문구를 정확히 입력해주세요. (${ACCOUNT_DELETE_CONFIRM_TEXT})`, "error");
+      return;
+    }
+
+    setIsDeletingAccount(true);
+    try {
+      const formData = new FormData();
+      formData.set("password", deletePassword);
+      formData.set("confirm_text", deleteConfirmText);
+
+      const result = await deleteAccountAction(formData);
+      if (!result.success) {
+        toast(result.error ?? "회원탈퇴에 실패했습니다.", "error");
+      }
+    } catch {
+      // redirect는 에러로 throw되므로 무시
+    } finally {
+      setIsDeletingAccount(false);
     }
   }
 
@@ -484,6 +521,58 @@ export function ProfileContent({ profile, email, stats }: ProfileContentProps) {
           >
             로그아웃
           </Button>
+
+          {/* 회원탈퇴 */}
+          <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4">
+            <div className="flex flex-col gap-1.5">
+              <p className="text-sm font-semibold text-red-600">회원탈퇴</p>
+              <p className="text-xs text-red-700/90">
+                회원탈퇴 시 프로필, 할 일, 세부 단계 등 계정 데이터가 즉시 영구 삭제되며 복구할 수
+                없습니다.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowDeleteForm((prev) => !prev)}
+              className="mt-3 w-full rounded-lg border border-red-500/40 bg-background px-4 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-500/10 cursor-pointer"
+            >
+              {showDeleteForm ? "탈퇴 폼 닫기" : "회원탈퇴 진행"}
+            </button>
+
+            {showDeleteForm && (
+              <div className="mt-3 flex flex-col gap-3 rounded-lg border border-red-500/20 bg-background p-3">
+                <Input
+                  id="delete_password"
+                  label="비밀번호 재입력"
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  placeholder="현재 비밀번호 입력"
+                  autoComplete="current-password"
+                />
+                <Input
+                  id="delete_confirm_text"
+                  label={`확인 문구 (${ACCOUNT_DELETE_CONFIRM_TEXT})`}
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder={ACCOUNT_DELETE_CONFIRM_TEXT}
+                  autoComplete="off"
+                />
+                <Button
+                  onClick={handleDeleteAccount}
+                  isLoading={isDeletingAccount}
+                  disabled={
+                    !deletePassword ||
+                    deleteConfirmText !== ACCOUNT_DELETE_CONFIRM_TEXT
+                  }
+                  className="w-full bg-red-600 text-white hover:bg-red-700 active:bg-red-800"
+                >
+                  영구 삭제 후 탈퇴
+                </Button>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>
