@@ -24,10 +24,10 @@ export function LifeClockHeader({ age, activeChapterTitle }: LifeClockHeaderProp
 
   return (
     <section className="rounded-xl border border-foreground/10 bg-foreground/[0.03] px-4 py-4">
-      <p className="text-sm text-foreground/60">당신의 인생 시계</p>
-      <p className="text-xl font-semibold mt-1">당신의 인생 시계: {lifeClockLabel}</p>
+      <p className="text-sm text-foreground/60">인생 시계</p>
+      <p className="text-xl font-semibold mt-1">{lifeClockLabel}</p>
       <p className="text-sm text-foreground/70 mt-3">
-        이번 시즌의 주제: {activeChapterTitle ?? "지금은 탐색의 챕터"}
+        이번 시즌의 장면: {activeChapterTitle ?? "지금은 탐색의 챕터"}
       </p>
     </section>
   );

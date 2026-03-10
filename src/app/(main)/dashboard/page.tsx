@@ -49,8 +49,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     redirect("/login");
   }
 
-  const onboardingV2Enabled = featureFlags.onboardingV2();
-  const dashboardV2Enabled = featureFlags.dashboardV2();
+  const onboardingV2Enabled = featureFlags.onboardingV2(user.id);
+  const dashboardV2Enabled = featureFlags.dashboardV2(user.id);
 
   if (dashboardV2Enabled) {
     const profile = await getProfile(supabase, user.id);

@@ -17,7 +17,7 @@ export default async function OnboardingPage() {
     redirect("/login");
   }
 
-  if (!featureFlags.onboardingV2()) {
+  if (!featureFlags.onboardingV2(user.id)) {
     redirect("/dashboard");
   }
 

@@ -15,7 +15,7 @@ export function ReviewInsightCard({ review }: ReviewInsightCardProps) {
 
   return (
     <section className="rounded-xl border border-foreground/10 px-4 py-4">
-      <p className="text-sm text-foreground/60 mb-2">회고 / 학습</p>
+      <p className="text-sm text-foreground/60 mb-2">회고와 발견</p>
 
       {!isReviewMature && (
         <div className="flex flex-col gap-2">
@@ -58,7 +58,7 @@ export function ReviewInsightCard({ review }: ReviewInsightCardProps) {
 
       <Link
         href="/review"
-        className="mt-3 inline-flex min-h-[36px] items-center rounded-lg border border-foreground/20 px-3 text-xs text-foreground/70 transition-colors hover:bg-foreground/5"
+        className="mt-3 inline-flex min-h-[44px] items-center rounded-lg border border-foreground/20 px-3 text-xs text-foreground/70 transition-colors hover:bg-foreground/5"
       >
         회고 자세히 보기
       </Link>

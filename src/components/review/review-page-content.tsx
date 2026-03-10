@@ -97,7 +97,7 @@ export function ReviewPageContent({ displayName, data, fetchError }: ReviewPageC
         </section>
       )}
 
-      <section className="grid grid-cols-2 gap-3">
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-foreground/10 px-4 py-4">
           <p className="text-xs text-foreground/60">누적 완료</p>
           <p className="text-xl font-semibold mt-1">{data.completedCount}개</p>
@@ -170,7 +170,7 @@ export function ReviewPageContent({ displayName, data, fetchError }: ReviewPageC
                 </div>
                 <Link
                   href={`/tasks/${item.id}`}
-                  className="inline-flex min-h-[32px] items-center rounded-md border border-foreground/20 px-2.5 text-xs text-foreground/70 transition-colors hover:bg-foreground/5"
+                  className="inline-flex min-h-[44px] items-center rounded-md border border-foreground/20 px-3 text-xs text-foreground/70 transition-colors hover:bg-foreground/5"
                 >
                   상세
                 </Link>

@@ -62,7 +62,7 @@ export function SubtaskCard({
                 type="button"
                 onClick={() => onChangeDifficulty(subtask.temp_id, d)}
                 className={cn(
-                  "rounded-md px-3 py-1.5 text-xs font-medium transition-all min-h-[36px] cursor-pointer",
+                  "rounded-md px-3 py-2 text-xs font-medium transition-all min-h-[44px] cursor-pointer",
                   isActive
                     ? dConfig.tailwind + " ring-1 ring-current"
                     : "text-foreground/40 hover:text-foreground/60"
@@ -80,7 +80,7 @@ export function SubtaskCard({
             type="button"
             onClick={() => onChangeTime(subtask.temp_id, -5)}
             disabled={subtask.estimated_minutes <= 5}
-            className="flex items-center justify-center w-8 h-8 rounded-md border border-foreground/20 text-foreground/60 hover:bg-foreground/5 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+            className="flex items-center justify-center w-11 h-11 rounded-md border border-foreground/20 text-foreground/60 hover:bg-foreground/5 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
           >
             −
           </button>
@@ -91,7 +91,7 @@ export function SubtaskCard({
             type="button"
             onClick={() => onChangeTime(subtask.temp_id, 5)}
             disabled={subtask.estimated_minutes >= 120}
-            className="flex items-center justify-center w-8 h-8 rounded-md border border-foreground/20 text-foreground/60 hover:bg-foreground/5 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+            className="flex items-center justify-center w-11 h-11 rounded-md border border-foreground/20 text-foreground/60 hover:bg-foreground/5 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
           >
             +
           </button>

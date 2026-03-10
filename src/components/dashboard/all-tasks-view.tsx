@@ -71,24 +71,26 @@ export function AllTasksView({
     <div className="flex flex-col gap-6">
       {showHeader && (
         <div>
-          <h1 className="text-xl font-bold">안녕, {displayName || "친구"} 👋</h1>
+          <h1 className="text-xl font-bold">
+            반가워요, {displayName || "친구"}{displayName ? "님" : ""}
+          </h1>
           <p className="text-sm text-foreground/60 mt-1">
             {optimisticTasks.length > 0
-              ? `${optimisticTasks.length}개 할일, ${totalSubtasks}개 세부 단계, 총 ${formatMinutes(totalMinutes)}`
-              : "등록된 할일이 없어요"}
+              ? `${optimisticTasks.length}개의 한 걸음과 ${totalSubtasks}개의 세부 단계가 있어요. 예상 총 ${formatMinutes(totalMinutes)}`
+              : "아직 등록된 한 걸음이 없어요."}
           </p>
         </div>
       )}
 
       {optimisticTasks.length === 0 && (
         <div className="rounded-lg border border-dashed border-foreground/20 px-4 py-4">
-          <p className="text-sm text-foreground/70">등록된 할일이 없어요.</p>
+          <p className="text-sm text-foreground/70">아직 등록된 한 걸음이 없어요.</p>
         </div>
       )}
 
       {activeTasks.length > 0 && (
         <section>
-          <h2 className="text-sm font-semibold text-foreground/50 mb-3">진행 중</h2>
+          <h2 className="text-sm font-semibold text-foreground/50 mb-3">이어가는 중</h2>
           <div className="flex flex-col gap-3 md:grid md:grid-cols-2">
             {activeTasks.map((task) => (
               <TaskCard
@@ -118,7 +120,7 @@ export function AllTasksView({
             >
               <path d="M4 2L9 6L4 10V2Z" />
             </svg>
-            완료 ({completedTasks.length})
+            마친 한 걸음 ({completedTasks.length})
           </button>
 
           {completedOpen && (

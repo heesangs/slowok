@@ -64,7 +64,7 @@ export function DailyStepCard({ dailyStep, selectedCondition }: DailyStepCardPro
               <Link
                 key={option.value}
                 href={`/dashboard?condition=${option.value}`}
-                className={`rounded-full px-3 py-1.5 text-xs min-h-[36px] inline-flex items-center transition-colors ${
+                className={`rounded-full px-3 py-2 text-xs min-h-[44px] inline-flex items-center transition-colors ${
                   isActive
                     ? "bg-foreground text-background"
                     : "border border-foreground/20 text-foreground/80 hover:bg-foreground/5"

@@ -19,7 +19,7 @@ export default function MainLayout({
           <div className="flex items-center gap-2">
             <Link
               href="/buckets"
-              className="inline-flex items-center justify-center rounded-lg p-2 transition-colors hover:bg-foreground/5"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-foreground/5"
               aria-label="버킷"
             >
               <svg
@@ -38,7 +38,7 @@ export default function MainLayout({
             </Link>
             <Link
               href="/review"
-              className="inline-flex items-center justify-center rounded-lg p-2 transition-colors hover:bg-foreground/5"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-foreground/5"
               aria-label="회고"
             >
               <svg
@@ -57,7 +57,7 @@ export default function MainLayout({
             </Link>
             <Link
               href="/profile"
-              className="inline-flex items-center justify-center rounded-lg p-2 transition-colors hover:bg-foreground/5"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-foreground/5"
               aria-label="프로필"
             >
               <svg

@@ -9,7 +9,7 @@ interface LifeBalanceCardProps {
 export function LifeBalanceCard({ balance }: LifeBalanceCardProps) {
   return (
     <section className="rounded-xl border border-foreground/10 px-4 py-4">
-      <p className="text-sm text-foreground/60 mb-2">인생균형 진행</p>
+      <p className="text-sm text-foreground/60 mb-2">인생균형 흐름</p>
       {balance?.focusArea && (
         <p className="text-sm text-foreground/80">
           이번 시즌 손이 많이 가는 영역: {balance.focusArea}

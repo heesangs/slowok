@@ -136,7 +136,11 @@ export async function signUpAction(formData: FormData) {
     };
   }
 
-  if (featureFlags.onboardingV2()) {
+  const shouldUseOnboardingV2 = data.user?.id
+    ? featureFlags.onboardingV2(data.user.id)
+    : featureFlags.onboardingV2();
+
+  if (shouldUseOnboardingV2) {
     redirect("/onboarding");
   }
   redirect("/dashboard");
@@ -176,7 +180,7 @@ export async function signInAction(formData: FormData) {
     redirect("/dashboard");
   }
 
-  if (featureFlags.onboardingV2()) {
+  if (featureFlags.onboardingV2(userId)) {
     redirect("/onboarding");
   }
 
@@ -286,10 +290,6 @@ export async function saveOnboardingV2Action(
     chapterTitle?: string;
   }
 ) {
-  if (!featureFlags.onboardingV2()) {
-    return { error: "온보딩 v2가 비활성화되어 있습니다." };
-  }
-
   const sceneText = data.sceneText?.trim();
   const selectedWeeklyAction = data.selectedWeeklyAction?.trim();
   const lifeArea = data.lifeArea?.trim();
@@ -366,6 +366,10 @@ export async function saveOnboardingV2Action(
 
   if (!user) {
     redirect("/login");
+  }
+
+  if (!featureFlags.onboardingV2(user.id)) {
+    return { error: "온보딩 v2가 비활성화되어 있습니다." };
   }
 
   const { error } = await supabase.rpc("save_onboarding_data", {

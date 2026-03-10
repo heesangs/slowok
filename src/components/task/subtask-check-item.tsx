@@ -40,6 +40,7 @@ export function SubtaskCheckItem({
     >
       {/* 체크박스 행 */}
       <button
+        type="button"
         onClick={() => onToggle(subtask.id)}
         className="flex items-start gap-3 w-full text-left min-h-[44px] cursor-pointer"
       >
@@ -104,16 +105,18 @@ export function SubtaskCheckItem({
         <div className="mt-2 ml-8">
           {!showTimeInput ? (
             <button
+              type="button"
               onClick={() => setShowTimeInput(true)}
-              className="text-xs text-foreground/40 hover:text-foreground/60 transition-colors cursor-pointer"
+              className="inline-flex min-h-[44px] items-center px-1 text-xs text-foreground/40 transition-colors hover:text-foreground/60 cursor-pointer"
             >
               {subtask.actual_minutes ? "소요 시간 수정" : "실제 소요 시간 입력"}
             </button>
           ) : (
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => setLocalMinutes(Math.max(0, localMinutes - 5))}
-                className="flex items-center justify-center w-7 h-7 rounded border border-foreground/20 text-foreground/60 hover:bg-foreground/5 text-xs cursor-pointer"
+                className="flex items-center justify-center w-11 h-11 rounded border border-foreground/20 text-foreground/60 hover:bg-foreground/5 text-xs cursor-pointer"
               >
                 −
               </button>
@@ -121,20 +124,23 @@ export function SubtaskCheckItem({
                 {formatMinutes(localMinutes)}
               </span>
               <button
+                type="button"
                 onClick={() => setLocalMinutes(localMinutes + 5)}
-                className="flex items-center justify-center w-7 h-7 rounded border border-foreground/20 text-foreground/60 hover:bg-foreground/5 text-xs cursor-pointer"
+                className="flex items-center justify-center w-11 h-11 rounded border border-foreground/20 text-foreground/60 hover:bg-foreground/5 text-xs cursor-pointer"
               >
                 +
               </button>
               <button
+                type="button"
                 onClick={handleSaveMinutes}
-                className="text-xs font-medium text-green-500 hover:text-green-600 ml-1 cursor-pointer"
+                className="min-h-[44px] px-2 text-xs font-medium text-green-500 hover:text-green-600 ml-1 cursor-pointer"
               >
                 저장
               </button>
               <button
+                type="button"
                 onClick={() => setShowTimeInput(false)}
-                className="text-xs text-foreground/40 hover:text-foreground/60 cursor-pointer"
+                className="min-h-[44px] px-2 text-xs text-foreground/40 hover:text-foreground/60 cursor-pointer"
               >
                 취소
               </button>

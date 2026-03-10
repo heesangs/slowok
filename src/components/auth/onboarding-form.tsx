@@ -1,6 +1,6 @@
 "use client";
 
-// 온보딩 폼 — 4단계 멀티스텝: 닉네임 → 사용 목적 → 세부 설정 → 나의 속도
+// 온보딩 폼 — 4단계 멀티스텝: 인생시간 체험 → 삶의 장면 선택 → AI 정리 → 첫 실행안 확정
 
 import { Button } from "@/components/ui/button";
 import {
@@ -773,7 +773,7 @@ export function OnboardingForm() {
         </div>
       )}
 
-      {/* Step 2: 사용 목적 */}
+      {/* Step 2: 삶의 장면 선택 */}
       {step === 2 && (
         <div className="flex flex-col gap-6">
           <div className="rounded-xl border border-foreground/10 bg-foreground/[0.03] px-4 py-3">
@@ -877,7 +877,7 @@ export function OnboardingForm() {
       {step === 3 && (
         <div className="flex flex-col gap-6">
           <div>
-            <h2 className="text-lg font-semibold mb-1">당신의 장면을 정리하고 있어요</h2>
+            <h2 className="text-lg font-semibold mb-1">삶의 장면을 시간으로 정리하고 있어요</h2>
             <p className="text-sm text-foreground/60">시간 지평으로 나눠서 지금 시작할 한 걸음을 찾아볼게요</p>
           </div>
 
@@ -982,7 +982,7 @@ export function OnboardingForm() {
         <div className="flex flex-col gap-6">
           <div>
             <h2 className="text-lg font-semibold mb-1">이번 주의 한 걸음</h2>
-            <p className="text-sm text-foreground/60">AI가 첫 실행안을 만들었어요</p>
+            <p className="text-sm text-foreground/60">지금 시작하기 쉬운 실행안으로 다듬었어요</p>
           </div>
 
           <div className="rounded-xl border border-foreground/10 bg-foreground/[0.03] px-4 py-4">

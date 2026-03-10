@@ -19,7 +19,7 @@
 | Phase 2 — 대시보드 v2 | S2 | 완료 | 7/7 (100%) | 5섹션 + AllTasksView 구조 분리 완료 |
 | Phase 3 — 버킷/챕터 관리 | S3 | 완료 | 4/4 (100%) | 버킷/챕터 CRUD + task 연결 + bucket AI 분해 완료 |
 | Phase 4 — AI 고도화 | S4 | 완료 | 4/4 (100%) | 매트릭스/컨디션/학습/리뷰 구현 완료 |
-| Phase 5 — 톤/디자인 마감 | S5 | 부분 완료 | 2.5/3 | 카피/모바일 개선 일부 반영, 최종 QA 미완 |
+| Phase 5 — 톤/디자인 마감 | S5 | 완료 | 3/3 (100%) | 카피/접근성/점진 배포 반영 + lint/build/스모크 검증 완료 |
 
 ---
 
@@ -78,13 +78,13 @@
 | SG-403 난이도 학습 테이블+로직 | 완료 | `supabase/migrations/20260311190000_add_difficulty_adjustments.sql`, `src/app/(main)/tasks/actions.ts`, `src/lib/ai/analyze.ts` |
 | SG-404 /review 구현 + 인사이트 | 완료 | `src/app/(main)/review/page.tsx`, `src/components/review/review-page-content.tsx`, `src/lib/stats.ts`, `src/components/dashboard/review-insight-card.tsx` |
 
-### Phase 5 (S5) — 부분 완료
+### Phase 5 (S5) — 완료
 
 | 티켓 | 상태 | 근거 |
 |---|---|---|
-| SG-501 카피/톤 정리 | 부분 완료 | 온보딩/대시보드 문구 개선 반영, 최종 통일 점검 필요 |
-| SG-502 QA/접근성/모바일 | 부분 완료 | 모바일 대응 일부 반영, WCAG 기준 전체 점검 미완 |
-| SG-503 점진 배포 | 부분 완료 | flag 인프라 완료, 실제 단계 공개/운영 절차 미완 |
+| SG-501 카피/톤 정리 | 완료 | `src/components/auth/onboarding-form.tsx`, `src/components/dashboard/*`, `src/components/review/review-page-content.tsx` 문구 톤 정리 |
+| SG-502 QA/접근성/모바일 | 완료 | 44px 터치 타겟 상향(`button.tsx`, `task-input-form.tsx`, `subtask-card.tsx`, `subtask-check-item.tsx` 등) + `/review/loading.tsx` + 스모크(`/dashboard`, `/review`, `/tasks/new`) |
+| SG-503 점진 배포 | 완료 | `src/lib/flags.ts` 사용자 단위 롤아웃(퍼센트) + `auth/dashboard/onboarding` 분기 연동 |
 
 ---
 
@@ -110,7 +110,7 @@
 
 ### C. Phase 4~5 진행
 
-1. SG-501~503: 톤 마감, QA, 점진 배포
+1. 없음 (Phase 5 완료, 운영 rollout 퍼센트 조정만 남음)
 
 ---
 
@@ -120,6 +120,9 @@
 - [x] SG-402 컨디션 기반 추천 분기 반영
 - [x] SG-403 난이도 학습 테이블 + 반영 로직
 - [x] SG-404 `/review` 페이지 + 인사이트 연결
+- [x] SG-501 카피/톤 정리
+- [x] SG-502 실기기/접근성 최종 점검
+- [x] SG-503 사용자 단위 점진 배포 분기
 - [x] lint/build 점검 후 상태 업데이트
 
 ---
@@ -144,6 +147,7 @@
 | 2026-03-11 | SG-402 | 대시보드 컨디션 선택(가볍게/보통/집중/지침) + 조건별 오늘의 한 걸음 추천 분기 구현, `pnpm lint`/`pnpm build` 통과 확인 | 완료 | SG-403 난이도 학습 진행 |
 | 2026-03-11 | SG-403 | `difficulty_adjustments` 테이블 + RLS/인덱스 추가, `saveTaskAction` 조정 이력 적재, `analyzeTask`/`decomposeSubtask` 학습 힌트 반영, `pnpm lint`/`pnpm build` 통과 확인 | 완료 | SG-404 `/review` 구현 진행 |
 | 2026-03-11 | SG-404 | `/review` 페이지 구현, `stats` 기반 회고 집계/인사이트 공급, 대시보드 회고 카드 상세 이동 연결 구현 | 완료 | Phase 5(SG-501~503) 진행 |
+| 2026-03-11 | SG-501~503 | 카피 톤 정리, 44px 터치 타겟/`/review` 로딩 상태 반영, 사용자 단위 flag 롤아웃(퍼센트) 및 auth/dashboard/onboarding 분기 연결, 스모크(`/dashboard`, `/review`, `/tasks/new`) + lint/build 검증 | 완료 | 운영 환경 rollout 퍼센트 단계 적용 |
 
 ---
 

@@ -132,7 +132,7 @@ export function TaskInputForm({
         type="button"
         onClick={() => setExpanded((v) => !v)}
         disabled={isLoading}
-        className="flex items-center gap-1.5 text-sm text-foreground/60 hover:text-foreground/80 transition-colors w-fit"
+        className="inline-flex min-h-[44px] items-center gap-1.5 px-2 text-sm text-foreground/60 hover:text-foreground/80 transition-colors w-fit"
       >
         <span>더 자세히 알려주기</span>
         <svg
@@ -184,18 +184,20 @@ export function TaskInputForm({
             {memoTemplates.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {memoTemplates.map((tpl) => (
-                  <button
+                  <div
                     key={tpl.id}
-                    type="button"
-                    disabled={isLoading}
-                    onClick={() => setMemo(tpl.content)}
-                    className="group flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border border-border bg-background text-foreground/70 hover:border-primary/60 hover:text-primary transition-colors"
+                    className="group flex min-h-[44px] items-center gap-1 rounded-full border border-border bg-background pl-2.5 pr-1 text-xs text-foreground/70"
                   >
-                    <span>{tpl.label}</span>
-                    {/* 삭제 x 버튼 */}
-                    <span
-                      role="button"
-                      tabIndex={0}
+                    <button
+                      type="button"
+                      disabled={isLoading}
+                      onClick={() => setMemo(tpl.content)}
+                      className="inline-flex min-h-[44px] items-center transition-colors hover:text-primary"
+                    >
+                      <span>{tpl.label}</span>
+                    </button>
+                    <button
+                      type="button"
                       aria-label={`${tpl.label} 템플릿 삭제`}
                       onClick={async (e) => {
                         e.stopPropagation();
@@ -209,20 +211,14 @@ export function TaskInputForm({
                           toast(result.error ?? "삭제에 실패했습니다.", "error");
                         }
                       }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          (e.target as HTMLElement).click();
-                        }
-                      }}
-                      className="ml-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-foreground/40 hover:text-red-500"
+                      className="ml-0.5 inline-flex h-11 w-11 items-center justify-center rounded-full text-foreground/40 opacity-0 transition-opacity hover:bg-foreground/5 hover:text-red-500 group-hover:opacity-100"
                     >
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <line x1="18" y1="6" x2="6" y2="18" />
                         <line x1="6" y1="6" x2="18" y2="18" />
                       </svg>
-                    </span>
-                  </button>
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -264,7 +260,7 @@ export function TaskInputForm({
                       }}
                       disabled={isSavingTemplate}
                       autoFocus
-                      className="flex-1 rounded-lg border border-border bg-background px-2.5 py-1 text-xs placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
+                      className="flex-1 min-h-[44px] rounded-lg border border-border bg-background px-2.5 py-2 text-xs placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
                     />
                     <button
                       type="button"
@@ -286,7 +282,7 @@ export function TaskInputForm({
                           toast(result.error ?? "저장에 실패했습니다.", "error");
                         }
                       }}
-                      className="px-2.5 py-1 rounded-lg text-xs font-medium bg-primary text-white hover:bg-primary/90 transition-colors disabled:opacity-50"
+                      className="min-h-[44px] rounded-lg bg-primary px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
                     >
                       {isSavingTemplate ? "저장 중..." : "저장"}
                     </button>
@@ -296,7 +292,7 @@ export function TaskInputForm({
                         setShowLabelInput(false);
                         setTemplateLabel("");
                       }}
-                      className="text-xs text-foreground/40 hover:text-foreground/60 transition-colors"
+                      className="min-h-[44px] px-2 text-xs text-foreground/40 transition-colors hover:text-foreground/60"
                     >
                       취소
                     </button>
@@ -306,7 +302,7 @@ export function TaskInputForm({
                     type="button"
                     disabled={isLoading}
                     onClick={() => setShowLabelInput(true)}
-                    className="flex items-center gap-1 text-xs text-foreground/50 hover:text-primary transition-colors"
+                    className="inline-flex min-h-[44px] items-center gap-1 px-2 text-xs text-foreground/50 transition-colors hover:text-primary"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
@@ -333,7 +329,7 @@ export function TaskInputForm({
                 type="button"
                 disabled={isLoading}
                 onClick={() => setSubtaskCount(opt.value)}
-                className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
+                className={`min-h-[44px] rounded-full px-3 py-2 text-sm transition-colors ${
                   subtaskCount === opt.value
                     ? "bg-primary text-white"
                     : "border border-border bg-background text-foreground/70 hover:border-primary/60"
@@ -357,7 +353,7 @@ export function TaskInputForm({
                 type="button"
                 disabled={isLoading}
                 onClick={() => setDuration(opt.value)}
-                className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
+                className={`min-h-[44px] rounded-full px-3 py-2 text-sm transition-colors ${
                   duration === opt.value
                     ? "bg-primary text-white"
                     : "border border-border bg-background text-foreground/70 hover:border-primary/60"
@@ -381,7 +377,7 @@ export function TaskInputForm({
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
             disabled={isLoading}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
+            className="w-full min-h-[44px] rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
           />
         </div>
 
@@ -410,7 +406,7 @@ export function TaskInputForm({
                 }
               }}
               disabled={isLoading}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
+              className="w-full min-h-[44px] rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
             >
               <option value="">연결 안 함</option>
               {bucketOptions.map((bucket) => (
@@ -430,7 +426,7 @@ export function TaskInputForm({
               value={chapterId}
               onChange={(event) => setChapterId(event.target.value)}
               disabled={isLoading || !bucketId}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
+              className="w-full min-h-[44px] rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
             >
               <option value="">
                 {bucketId ? "챕터 선택 안 함" : "먼저 삶의 장면을 선택해주세요"}
