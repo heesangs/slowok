@@ -3,6 +3,7 @@
 // 인증 관련 서버 액션
 
 import { createClient } from "@/lib/supabase/server";
+import { featureFlags } from "@/lib/flags";
 import { redirect } from "next/navigation";
 import type {
   OnboardingV2SavePayload,
@@ -135,7 +136,10 @@ export async function signUpAction(formData: FormData) {
     };
   }
 
-  redirect("/onboarding");
+  if (featureFlags.onboardingV2()) {
+    redirect("/onboarding");
+  }
+  redirect("/dashboard");
 }
 
 export async function signInAction(formData: FormData) {
@@ -170,9 +174,13 @@ export async function signInAction(formData: FormData) {
 
   if (profile) {
     redirect("/dashboard");
-  } else {
+  }
+
+  if (featureFlags.onboardingV2()) {
     redirect("/onboarding");
   }
+
+  redirect("/dashboard");
 }
 
 export async function signOutAction() {
@@ -278,6 +286,10 @@ export async function saveOnboardingV2Action(
     chapterTitle?: string;
   }
 ) {
+  if (!featureFlags.onboardingV2()) {
+    return { error: "온보딩 v2가 비활성화되어 있습니다." };
+  }
+
   const sceneText = data.sceneText?.trim();
   const selectedWeeklyAction = data.selectedWeeklyAction?.trim();
   const lifeArea = data.lifeArea?.trim();

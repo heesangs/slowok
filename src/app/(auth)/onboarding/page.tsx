@@ -1,6 +1,7 @@
 // 온보딩 페이지 — 프로필 미설정 사용자에게 표시
 
 import { createClient } from "@/lib/supabase/server";
+import { featureFlags } from "@/lib/flags";
 import { redirect } from "next/navigation";
 import { OnboardingForm } from "@/components/auth/onboarding-form";
 
@@ -14,6 +15,10 @@ export default async function OnboardingPage() {
 
   if (!user) {
     redirect("/login");
+  }
+
+  if (!featureFlags.onboardingV2()) {
+    redirect("/dashboard");
   }
 
   // 이미 프로필이 있으면 대시보드로

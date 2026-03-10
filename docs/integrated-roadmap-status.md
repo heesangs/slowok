@@ -16,7 +16,7 @@
 |---|---|---|---|---|
 | Phase 0 — DB/타입/쿼리 기반 | S0 | 완료 | 5/5 (100%) | 마이그레이션/RLS/RPC 반영 완료 |
 | Phase 1 — 온보딩 v2 | S1 | 완료 | 8/8 (100%) | Step1~4 + AI + 저장 + 리다이렉트 완료 |
-| Phase 2 — 대시보드 v2 | S2 | 부분 완료 | 3/7 | 기능 구현 완료, 구조 분리 진행 중 |
+| Phase 2 — 대시보드 v2 | S2 | 완료 | 7/7 (100%) | 5섹션 + AllTasksView 구조 분리 완료 |
 | Phase 3 — 버킷/챕터 관리 | S3 | 미착수 | 0/4 (0%) | 라우트/CRUD/연결 미구현 |
 | Phase 4 — AI 고도화 | S4 | 미착수 | 0/4 (0%) | 매트릭스/학습/리뷰 미구현 |
 | Phase 5 — 톤/디자인 마감 | S5 | 부분 완료 | 2.5/3 | 카피/모바일 개선 일부 반영, 최종 QA 미완 |
@@ -33,7 +33,7 @@
 | SG-002 Phase0 RLS/인덱스 | 완료 | `supabase/migrations/20260308194500_phase0_life_schema_rls_indexes.sql` |
 | SG-003 도메인 타입 추가 | 완료 | `src/types/index.ts` |
 | SG-004 대시보드 데이터 헬퍼 | 완료 | `src/lib/dashboard/queries.ts` |
-| SG-005 feature flag 추가 | 부분 완료 | `src/lib/flags.ts` 구현 완료. `dashboard_v2` 사용 중, `onboarding_v2` 분기 연결은 후속 필요 |
+| SG-005 feature flag 추가 | 완료 | `src/lib/flags.ts`, `src/app/(auth)/actions.ts`, `src/app/(auth)/onboarding/page.tsx`, `src/app/(main)/dashboard/page.tsx` |
 
 ### Phase 1 (S1) — 완료
 
@@ -48,16 +48,16 @@
 | SG-107 save_onboarding_data RPC | 완료 | `supabase/migrations/20260308200000_create_save_onboarding_data_rpc.sql` |
 | SG-108 /onboarding 통합 연결 | 완료 | `src/app/(auth)/actions.ts`, `src/app/(auth)/onboarding/page.tsx` |
 
-### Phase 2 (S2) — 기능 구현, 구조 미분리
+### Phase 2 (S2) — 완료
 
 | 티켓 | 상태 | 근거 |
 |---|---|---|
 | SG-201 대시보드 서버 집계 연결 | 완료 | `src/app/(main)/dashboard/page.tsx` |
-| SG-202 LifeClockHeader | 미완료(인라인 구현) | `dashboard-content-v2.tsx` 내부 구현, 파일 분리 없음 |
-| SG-203 DailyStepCard | 미완료(인라인 구현) | `dashboard-content-v2.tsx` 내부 구현, 파일 분리 없음 |
-| SG-204 LifeBalanceCard | 미완료(인라인 구현) | `dashboard-content-v2.tsx` 내부 구현, 파일 분리 없음 |
-| SG-205 BucketSuggestionCard | 미완료(인라인 구현) | `dashboard-content-v2.tsx` 내부 구현, 파일 분리 없음 |
-| SG-206 ReviewInsightCard | 미완료(인라인 구현) | `dashboard-content-v2.tsx` 내부 구현, 파일 분리 없음 |
+| SG-202 LifeClockHeader | 완료 | `src/components/dashboard/life-clock-header.tsx`, `dashboard-content-v2.tsx` |
+| SG-203 DailyStepCard | 완료 | `src/components/dashboard/daily-step-card.tsx`, `dashboard-content-v2.tsx` |
+| SG-204 LifeBalanceCard | 완료 | `src/components/dashboard/life-balance-card.tsx`, `dashboard-content-v2.tsx` |
+| SG-205 BucketSuggestionCard | 완료 | `src/components/dashboard/bucket-suggestion-card.tsx`, `dashboard-content-v2.tsx` |
+| SG-206 ReviewInsightCard | 완료 | `src/components/dashboard/review-insight-card.tsx`, `dashboard-content-v2.tsx` |
 | SG-207 AllTasksView 분리 | 완료 | `src/components/dashboard/all-tasks-view.tsx`, `dashboard-content-v2.tsx`, `dashboard-content.tsx` |
 
 ### Phase 3 (S3) — 미착수
@@ -90,14 +90,9 @@
 
 ## 3) 다음 단계 실행 계획 (우선순위)
 
-### A. Phase 2 마무리 (S2)
+### A. Phase 2 후속 정리
 
-1. SG-203: `DailyStepCard` 분리
-2. SG-202: `LifeClockHeader` 분리
-3. SG-204: `LifeBalanceCard` 분리
-4. SG-205: `BucketSuggestionCard` 분리
-5. SG-206: `ReviewInsightCard` 분리
-6. SG-005 보완: `onboarding_v2` 실제 분기 연결
+1. 없음 (S2 구조 분리 + SG-005 분기 연결 완료)
 
 완료 기준:
 - `dashboard-content-v2.tsx`는 오케스트레이션만 담당
@@ -126,12 +121,12 @@
 ## 4) 즉시 착수 체크리스트 (이번 주)
 
 - [x] SG-207 `all-tasks-view.tsx` 파일 생성 및 분리
-- [ ] SG-203 `daily-step-card.tsx` 파일 생성 및 분리
-- [ ] SG-202 `life-clock-header.tsx` 파일 생성 및 분리
-- [ ] SG-204 `life-balance-card.tsx` 파일 생성 및 분리
-- [ ] SG-205 `bucket-suggestion-card.tsx` 파일 생성 및 분리
-- [ ] SG-206 `review-insight-card.tsx` 파일 생성 및 분리
-- [ ] SG-005 `onboarding_v2` 플래그 분기 연결
+- [x] SG-203 `daily-step-card.tsx` 파일 생성 및 분리
+- [x] SG-202 `life-clock-header.tsx` 파일 생성 및 분리
+- [x] SG-204 `life-balance-card.tsx` 파일 생성 및 분리
+- [x] SG-205 `bucket-suggestion-card.tsx` 파일 생성 및 분리
+- [x] SG-206 `review-insight-card.tsx` 파일 생성 및 분리
+- [x] SG-005 `onboarding_v2` 플래그 분기 연결
 - [ ] lint/build 점검 후 상태 업데이트
 
 ---
@@ -142,6 +137,12 @@
 |---|---|---|---|---|
 | 2026-03-10 | 문서화 | 통합 실행 로드맵 현황/계획 문서 생성 | 완료 | SG-207부터 구현 시작 |
 | 2026-03-11 | SG-207 | `AllTasksView` 신규 생성 및 v1/v2 대시보드 연결 | 완료 | SG-203 카드 분리 시작 |
+| 2026-03-11 | SG-203 | `DailyStepCard` 컴포넌트 분리 및 v2 대시보드 연결 | 완료 | SG-202 카드 분리 시작 |
+| 2026-03-11 | SG-202 | `LifeClockHeader` 컴포넌트 분리 및 v2 대시보드 연결 | 완료 | SG-204 카드 분리 시작 |
+| 2026-03-11 | SG-204 | `LifeBalanceCard` 컴포넌트 분리 및 v2 대시보드 연결 | 완료 | SG-205 카드 분리 시작 |
+| 2026-03-11 | SG-205 | `BucketSuggestionCard` 컴포넌트 분리 및 v2 대시보드 연결 | 완료 | SG-206 카드 분리 시작 |
+| 2026-03-11 | SG-206 | `ReviewInsightCard` 컴포넌트 분리 및 v2 대시보드 연결 | 완료 | SG-005 분기 연결 후 S3 착수 |
+| 2026-03-11 | SG-005 | `onboarding_v2` 분기 연결 (signIn/signUp, onboarding page, dashboard fallback) | 완료 | S3(SG-301) 착수 |
 
 ---
 

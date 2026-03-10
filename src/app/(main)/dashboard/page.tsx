@@ -34,88 +34,93 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  if (featureFlags.dashboardV2()) {
+  const onboardingV2Enabled = featureFlags.onboardingV2();
+  const dashboardV2Enabled = featureFlags.dashboardV2();
+
+  if (dashboardV2Enabled) {
     const profile = await getProfile(supabase, user.id);
     if (!profile) {
-      redirect("/onboarding");
+      if (onboardingV2Enabled) {
+        redirect("/onboarding");
+      }
+    } else {
+      const errors: string[] = [];
+      const [
+        activeChaptersResult,
+        dailyStepResult,
+        balanceResult,
+        suggestedBucketResult,
+        reviewResult,
+        allTasksResult,
+      ] =
+        await Promise.allSettled([
+          getActiveChapters(supabase, user.id),
+          getDailyStep(supabase, user.id),
+          getLifeBalance(supabase, user.id),
+          getUnstartedBucket(supabase, user.id),
+          getReviewData(supabase, user.id),
+          (async () => {
+            const { data, error } = await supabase
+              .from("tasks")
+              .select("*, subtasks(*), bucket:buckets(id, title)")
+              .eq("user_id", user.id)
+              .order("created_at", { ascending: false });
+
+            if (error) {
+              throw error;
+            }
+
+            return (data as TaskWithSubtasks[] | null) ?? [];
+          })(),
+        ]);
+
+      const activeChapters =
+        activeChaptersResult.status === "fulfilled"
+          ? activeChaptersResult.value
+          : (errors.push(toErrorMessage(activeChaptersResult.reason, "챕터 정보를 불러오지 못했습니다.")), []);
+
+      const dailyStep =
+        dailyStepResult.status === "fulfilled"
+          ? dailyStepResult.value
+          : (errors.push(toErrorMessage(dailyStepResult.reason, "오늘의 한 걸음을 불러오지 못했습니다.")), null);
+
+      const balance =
+        balanceResult.status === "fulfilled"
+          ? balanceResult.value
+          : (errors.push(toErrorMessage(balanceResult.reason, "인생균형 정보를 불러오지 못했습니다.")), null);
+
+      const suggestedBucket =
+        suggestedBucketResult.status === "fulfilled"
+          ? suggestedBucketResult.value
+          : (errors.push(toErrorMessage(suggestedBucketResult.reason, "버킷 추천을 불러오지 못했습니다.")), null);
+
+      const review =
+        reviewResult.status === "fulfilled"
+          ? reviewResult.value
+          : (errors.push(toErrorMessage(reviewResult.reason, "회고 데이터를 불러오지 못했습니다.")), null);
+
+      const allTasks =
+        allTasksResult.status === "fulfilled"
+          ? allTasksResult.value
+          : (errors.push(toErrorMessage(allTasksResult.reason, "전체 과제를 불러오지 못했습니다.")), []);
+
+      const v2Data: DashboardV2Data = {
+        profile,
+        activeChapters,
+        dailyStep,
+        balance,
+        suggestedBucket,
+        review,
+      };
+
+      return (
+        <DashboardContentV2
+          data={v2Data}
+          allTasks={allTasks}
+          fetchError={errors.length > 0 ? errors[0] : undefined}
+        />
+      );
     }
-
-    const errors: string[] = [];
-    const [
-      activeChaptersResult,
-      dailyStepResult,
-      balanceResult,
-      suggestedBucketResult,
-      reviewResult,
-      allTasksResult,
-    ] =
-      await Promise.allSettled([
-        getActiveChapters(supabase, user.id),
-        getDailyStep(supabase, user.id),
-        getLifeBalance(supabase, user.id),
-        getUnstartedBucket(supabase, user.id),
-        getReviewData(supabase, user.id),
-        (async () => {
-          const { data, error } = await supabase
-            .from("tasks")
-            .select("*, subtasks(*), bucket:buckets(id, title)")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false });
-
-          if (error) {
-            throw error;
-          }
-
-          return (data as TaskWithSubtasks[] | null) ?? [];
-        })(),
-      ]);
-
-    const activeChapters =
-      activeChaptersResult.status === "fulfilled"
-        ? activeChaptersResult.value
-        : (errors.push(toErrorMessage(activeChaptersResult.reason, "챕터 정보를 불러오지 못했습니다.")), []);
-
-    const dailyStep =
-      dailyStepResult.status === "fulfilled"
-        ? dailyStepResult.value
-        : (errors.push(toErrorMessage(dailyStepResult.reason, "오늘의 한 걸음을 불러오지 못했습니다.")), null);
-
-    const balance =
-      balanceResult.status === "fulfilled"
-        ? balanceResult.value
-        : (errors.push(toErrorMessage(balanceResult.reason, "인생균형 정보를 불러오지 못했습니다.")), null);
-
-    const suggestedBucket =
-      suggestedBucketResult.status === "fulfilled"
-        ? suggestedBucketResult.value
-        : (errors.push(toErrorMessage(suggestedBucketResult.reason, "버킷 추천을 불러오지 못했습니다.")), null);
-
-    const review =
-      reviewResult.status === "fulfilled"
-        ? reviewResult.value
-        : (errors.push(toErrorMessage(reviewResult.reason, "회고 데이터를 불러오지 못했습니다.")), null);
-
-    const allTasks =
-      allTasksResult.status === "fulfilled"
-        ? allTasksResult.value
-        : (errors.push(toErrorMessage(allTasksResult.reason, "전체 과제를 불러오지 못했습니다.")), []);
-
-    const v2Data: DashboardV2Data = {
-      profile,
-      activeChapters,
-      dailyStep,
-      balance,
-      suggestedBucket,
-      review,
-    };
-
-    return (
-      <DashboardContentV2
-        data={v2Data}
-        allTasks={allTasks}
-        fetchError={errors.length > 0 ? errors[0] : undefined}
-      />
-    );
   }
 
   // 프로필 조회
