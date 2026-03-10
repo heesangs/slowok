@@ -3,6 +3,8 @@
 import { geminiModel } from "./gemini";
 import type {
   AISubtaskSuggestion,
+  BucketDecompositionSuggestion,
+  BucketHorizon,
   Difficulty,
   FirstStepPlanResult,
   Gender,
@@ -337,6 +339,136 @@ interface TaskAnalysisHints {
   desiredSubtaskCount?: number;
   targetDurationMinutes?: number;
   dueDate?: string;
+}
+
+interface DecomposeBucketInput {
+  bucketTitle: string;
+  horizon: BucketHorizon;
+  profile: Profile | null;
+  existingChapterTitles?: string[];
+}
+
+function buildPersonalityHint(personalityType: Profile["personality_type"] | undefined | null): string {
+  if (personalityType === "IT") {
+    return "성향 IT: 분석적이고 체계적으로, 측정 가능한 작은 단계를 제시";
+  }
+  if (personalityType === "IF") {
+    return "성향 IF: 의미와 몰입을 살리는 조용한 실천 단계를 제시";
+  }
+  if (personalityType === "ET") {
+    return "성향 ET: 실행 속도와 결과를 빠르게 확인할 수 있는 단계를 제시";
+  }
+  if (personalityType === "EF") {
+    return "성향 EF: 사람과 연결되고 공감을 얻을 수 있는 단계를 제시";
+  }
+  return "성향 정보 없음: 부담이 낮고 명확한 실행 단계로 제시";
+}
+
+function buildPaceHint(paceType: Profile["pace_type"] | undefined | null): string {
+  if (paceType === "slow") {
+    return "페이스 slow: 매일 10~20분 정도의 아주 작은 행동 중심으로 제시";
+  }
+  if (paceType === "balanced") {
+    return "페이스 balanced: 20~40분 정도의 안정적인 리듬으로 제시";
+  }
+  if (paceType === "focused") {
+    return "페이스 focused: 주 2회 집중 세션형 행동을 포함해 제시";
+  }
+  if (paceType === "recovery") {
+    return "페이스 recovery: 에너지 소모가 낮은 5~15분 행동 중심으로 제시";
+  }
+  return "페이스 정보 없음: 무리 없는 기본 페이스로 제시";
+}
+
+function buildFallbackBucketSuggestions(
+  bucketTitle: string,
+  horizon: BucketHorizon
+): BucketDecompositionSuggestion[] {
+  const horizonLabel = HORIZON_LABELS[horizon];
+  const base = bucketTitle.trim();
+  const firstActionDuration = horizon === "this_season" ? "15분" : "10분";
+
+  return [
+    {
+      chapterTitle: `${base} 준비 루틴 만들기`,
+      chapterDescription: `${horizonLabel} 목표를 시작하기 위한 기본 루틴을 정리합니다.`,
+      firstAction: `${firstActionDuration} 동안 시작 체크리스트 3개 작성하기`,
+    },
+    {
+      chapterTitle: `${base} 실행 환경 정돈하기`,
+      chapterDescription: `실행을 막는 방해 요소를 줄이고 바로 시작 가능한 환경을 만듭니다.`,
+      firstAction: "지금 당장 방해 요소 1개 제거하고 실행 장소 정리하기",
+    },
+    {
+      chapterTitle: `${base} 첫 결과 만들기`,
+      chapterDescription: `작은 결과물을 빠르게 만들어 동력을 확보합니다.`,
+      firstAction: "오늘 끝낼 수 있는 최소 결과물 1개 정의하고 10분 시작하기",
+    },
+  ];
+}
+
+function normalizeBucketSuggestions(
+  rawSuggestions: unknown,
+  bucketTitle: string,
+  horizon: BucketHorizon,
+  existingChapterTitles: string[]
+): BucketDecompositionSuggestion[] {
+  if (!Array.isArray(rawSuggestions)) {
+    return buildFallbackBucketSuggestions(bucketTitle, horizon);
+  }
+
+  const existingSet = new Set(existingChapterTitles.map((title) => title.trim()));
+  const normalized = rawSuggestions
+    .map((row) => {
+      const item = row as {
+        chapterTitle?: unknown;
+        chapter_title?: unknown;
+        title?: unknown;
+        chapterDescription?: unknown;
+        chapter_description?: unknown;
+        description?: unknown;
+        firstAction?: unknown;
+        first_action?: unknown;
+      };
+
+      const chapterTitle =
+        toNonEmptyText(item.chapterTitle) ??
+        toNonEmptyText(item.chapter_title) ??
+        toNonEmptyText(item.title);
+
+      const chapterDescription =
+        toNonEmptyText(item.chapterDescription) ??
+        toNonEmptyText(item.chapter_description) ??
+        toNonEmptyText(item.description);
+
+      const firstAction =
+        toNonEmptyText(item.firstAction) ??
+        toNonEmptyText(item.first_action);
+
+      if (!chapterTitle || !chapterDescription || !firstAction) {
+        return null;
+      }
+
+      if (existingSet.has(chapterTitle)) {
+        return null;
+      }
+
+      return {
+        chapterTitle,
+        chapterDescription,
+        firstAction,
+      };
+    })
+    .filter((row): row is BucketDecompositionSuggestion => Boolean(row))
+    .slice(0, 4);
+
+  if (normalized.length > 0) {
+    return normalized;
+  }
+
+  return buildFallbackBucketSuggestions(bucketTitle, horizon)
+    .filter((item) => !existingSet.has(item.chapterTitle))
+    .slice(0, 3);
 }
 
 /**
@@ -758,4 +890,77 @@ ${subtaskLabel}: "${parentTitle}"
     difficulty: (["easy", "medium", "hard"].includes(item.difficulty) ? item.difficulty : "medium") as AISubtaskSuggestion["difficulty"],
     estimated_minutes: Math.max(5, Math.min(60, Math.round(Number(item.estimated_minutes) || 10))),
   }));
+}
+
+/**
+ * 버킷(삶의 장면)을 2~4개의 챕터 + 첫 행동으로 분해
+ */
+export async function decomposeBucket(
+  input: DecomposeBucketInput
+): Promise<BucketDecompositionSuggestion[]> {
+  const bucketTitle = input.bucketTitle.trim();
+  if (!bucketTitle) {
+    throw new Error("버킷 제목이 비어 있습니다.");
+  }
+
+  const existingChapterTitles = (input.existingChapterTitles ?? [])
+    .map((title) => title.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+
+  const personalityHint = buildPersonalityHint(input.profile?.personality_type);
+  const paceHint = buildPaceHint(input.profile?.pace_type);
+  const horizonLabel = HORIZON_LABELS[input.horizon];
+
+  const prompt = `당신은 slowgoes 앱의 버킷 분해 코치입니다.
+사용자의 큰 삶의 장면(버킷)을 챕터 단위 목표로 나누고, 각 챕터마다 심리적 부담이 낮은 첫 행동을 제안하세요.
+
+입력 정보:
+- 버킷: "${bucketTitle}"
+- 시간 지평: ${horizonLabel}
+- 성향: ${input.profile?.personality_type ?? "미정"}
+- 페이스: ${input.profile?.pace_type ?? "미정"}
+- 기존 챕터 제목: ${existingChapterTitles.length > 0 ? existingChapterTitles.join(" | ") : "없음"}
+
+성향/페이스 적용 규칙:
+- ${personalityHint}
+- ${paceHint}
+
+출력 규칙:
+- 2~4개의 챕터를 제안
+- 챕터 제목은 중복 없이 구체적인 실행 문장으로 작성
+- 챕터 설명은 한 문장(20~60자)
+- firstAction은 지금 당장 시작 가능한 가장 작은 행동(5~20분)
+- 전체 문장은 한국어
+- 기존 챕터 제목과 겹치는 제안은 피함
+
+반드시 아래 JSON 배열 형식으로만 응답하세요:
+[
+  {
+    "chapterTitle": "챕터 제목",
+    "chapterDescription": "챕터 설명",
+    "firstAction": "부담이 낮은 첫 행동"
+  }
+]`;
+
+  let parsed: unknown;
+  try {
+    const result = await geminiModel.generateContent(prompt);
+    parsed = parseJsonResponse(result.response.text());
+  } catch (error) {
+    throw mapGeminiError(error);
+  }
+
+  const suggestions = normalizeBucketSuggestions(
+    parsed,
+    bucketTitle,
+    input.horizon,
+    existingChapterTitles
+  );
+
+  if (suggestions.length === 0) {
+    throw new Error("버킷 분해 결과를 만들지 못했습니다.");
+  }
+
+  return suggestions;
 }

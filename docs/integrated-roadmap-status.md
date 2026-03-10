@@ -17,7 +17,7 @@
 | Phase 0 — DB/타입/쿼리 기반 | S0 | 완료 | 5/5 (100%) | 마이그레이션/RLS/RPC 반영 완료 |
 | Phase 1 — 온보딩 v2 | S1 | 완료 | 8/8 (100%) | Step1~4 + AI + 저장 + 리다이렉트 완료 |
 | Phase 2 — 대시보드 v2 | S2 | 완료 | 7/7 (100%) | 5섹션 + AllTasksView 구조 분리 완료 |
-| Phase 3 — 버킷/챕터 관리 | S3 | 미착수 | 0/4 (0%) | 라우트/CRUD/연결 미구현 |
+| Phase 3 — 버킷/챕터 관리 | S3 | 완료 | 4/4 (100%) | 버킷/챕터 CRUD + task 연결 + bucket AI 분해 완료 |
 | Phase 4 — AI 고도화 | S4 | 미착수 | 0/4 (0%) | 매트릭스/학습/리뷰 미구현 |
 | Phase 5 — 톤/디자인 마감 | S5 | 부분 완료 | 2.5/3 | 카피/모바일 개선 일부 반영, 최종 QA 미완 |
 
@@ -60,14 +60,14 @@
 | SG-206 ReviewInsightCard | 완료 | `src/components/dashboard/review-insight-card.tsx`, `dashboard-content-v2.tsx` |
 | SG-207 AllTasksView 분리 | 완료 | `src/components/dashboard/all-tasks-view.tsx`, `dashboard-content-v2.tsx`, `dashboard-content.tsx` |
 
-### Phase 3 (S3) — 미착수
+### Phase 3 (S3) — 완료
 
 | 티켓 | 상태 | 근거 |
 |---|---|---|
-| SG-301 /buckets 목록+CRUD | 미착수 | `src/app/(main)/buckets/page.tsx` 없음 |
-| SG-302 /buckets/[id] 상세+챕터 | 미착수 | `src/app/(main)/buckets/[id]/page.tsx` 없음 |
-| SG-303 /tasks/new 버킷/챕터 연결 | 미착수 | `task-input-form.tsx` 및 `saveTaskAction`에 연결 파라미터 없음 |
-| SG-304 decomposeBucketAction | 미착수 | `src/lib/ai/analyze.ts`에 버킷 분해 액션 없음 |
+| SG-301 /buckets 목록+CRUD | 완료 | `src/app/(main)/buckets/page.tsx`, `src/components/buckets/buckets-page-content.tsx`, `src/app/(main)/buckets/actions.ts` |
+| SG-302 /buckets/[id] 상세+챕터 | 완료 | `src/app/(main)/buckets/[id]/page.tsx`, `src/components/buckets/bucket-detail-content.tsx`, `src/app/(main)/buckets/actions.ts` |
+| SG-303 /tasks/new 버킷/챕터 연결 | 완료 | `src/app/(main)/tasks/new/page.tsx`, `src/components/task/task-input-form.tsx`, `src/components/task/task-creator.tsx`, `src/app/(main)/tasks/actions.ts` |
+| SG-304 decomposeBucketAction | 완료 | `src/lib/ai/analyze.ts`, `src/app/(main)/buckets/actions.ts`, `src/components/buckets/bucket-detail-content.tsx` |
 
 ### Phase 4 (S4) — 미착수
 
@@ -101,10 +101,7 @@
 
 ### B. Phase 3 착수 (S3)
 
-1. SG-301: `/buckets` 라우트 + CRUD
-2. SG-302: `/buckets/[id]` + chapter CRUD
-3. SG-303: `/tasks/new` bucket/chapter 선택 연결
-4. SG-304: bucket 분해 AI 액션 추가
+1. 없음 (S3 완료)
 
 완료 기준:
 - 버킷/챕터 생성-수정-삭제 흐름 동작
@@ -120,14 +117,11 @@
 
 ## 4) 즉시 착수 체크리스트 (이번 주)
 
-- [x] SG-207 `all-tasks-view.tsx` 파일 생성 및 분리
-- [x] SG-203 `daily-step-card.tsx` 파일 생성 및 분리
-- [x] SG-202 `life-clock-header.tsx` 파일 생성 및 분리
-- [x] SG-204 `life-balance-card.tsx` 파일 생성 및 분리
-- [x] SG-205 `bucket-suggestion-card.tsx` 파일 생성 및 분리
-- [x] SG-206 `review-insight-card.tsx` 파일 생성 및 분리
-- [x] SG-005 `onboarding_v2` 플래그 분기 연결
-- [ ] lint/build 점검 후 상태 업데이트
+- [x] SG-301 `/buckets` 라우트 + CRUD 구현
+- [x] SG-302 `/buckets/[id]` 라우트 + chapter CRUD
+- [x] SG-303 `/tasks/new` bucket/chapter 연결 저장
+- [x] SG-304 bucket 분해 AI 액션 추가
+- [x] lint/build 점검 후 상태 업데이트
 
 ---
 
@@ -143,6 +137,10 @@
 | 2026-03-11 | SG-205 | `BucketSuggestionCard` 컴포넌트 분리 및 v2 대시보드 연결 | 완료 | SG-206 카드 분리 시작 |
 | 2026-03-11 | SG-206 | `ReviewInsightCard` 컴포넌트 분리 및 v2 대시보드 연결 | 완료 | SG-005 분기 연결 후 S3 착수 |
 | 2026-03-11 | SG-005 | `onboarding_v2` 분기 연결 (signIn/signUp, onboarding page, dashboard fallback) | 완료 | S3(SG-301) 착수 |
+| 2026-03-11 | SG-301 | `/buckets` 라우트 + CRUD + 시간지평 필터/그룹 UI 구현, `pnpm lint`/`pnpm build` 통과 확인 | 완료 | SG-302 상세+챕터 진행 |
+| 2026-03-11 | SG-302 | `/buckets/[id]` 상세 + chapter CRUD + `/tasks/new` 진입 버튼 구현, `pnpm lint`/`pnpm build` 통과 확인 | 완료 | SG-303 task 연결 저장 진행 |
+| 2026-03-11 | SG-303 | `/tasks/new`에 bucket/chapter 선택 UI + 기본값(query) + `saveTaskAction` 연결 저장/정합성 검증 구현, `pnpm lint`/`pnpm build` 통과 확인 | 완료 | SG-304 bucket 분해 AI 진행 |
+| 2026-03-11 | SG-304 | 버킷 분해 AI(`decomposeBucket`) + 성향×페이스 반영 + `/buckets/[id]` AI 제안 UI/챕터 추가 연결 구현, `pnpm lint`/`pnpm build` 통과 확인 | 완료 | Phase 4(SG-401) 착수 |
 
 ---
 

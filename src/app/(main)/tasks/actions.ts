@@ -60,6 +60,47 @@ async function assertTaskOwnership(
   }
 }
 
+async function assertBucketOwnership(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  bucketId: string,
+  userId: string
+) {
+  const { data, error } = await supabase
+    .from("buckets")
+    .select("id")
+    .eq("id", bucketId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error || !data) {
+    throw new Error("선택한 삶의 장면에 접근할 수 없습니다.");
+  }
+}
+
+async function getOwnedChapter(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  chapterId: string,
+  userId: string
+): Promise<{ id: string; bucket_id: string | null }> {
+  const { data, error } = await supabase
+    .from("chapters")
+    .select("id, bucket_id")
+    .eq("id", chapterId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error || !data) {
+    throw new Error("선택한 챕터에 접근할 수 없습니다.");
+  }
+
+  return { id: data.id as string, bucket_id: (data.bucket_id as string | null) ?? null };
+}
+
+function normalizeOptionalId(value: string | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
 // 서버 에러를 사용자 메시지로 안전하게 변환
 function toClientErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof Error)) return fallback;
@@ -484,6 +525,8 @@ export async function saveTaskAction(data: {
   desiredSubtaskCount?: number;
   targetDurationMinutes?: number;
   dueDate?: string;
+  bucketId?: string;
+  chapterId?: string;
 }): Promise<{
   success: boolean;
   taskId?: string;
@@ -491,6 +534,25 @@ export async function saveTaskAction(data: {
 }> {
   try {
     const { supabase, userId } = await getAuthUserId();
+
+    let normalizedBucketId = normalizeOptionalId(data.bucketId);
+    const normalizedChapterId = normalizeOptionalId(data.chapterId);
+
+    let ownedChapter: { id: string; bucket_id: string | null } | null = null;
+    if (normalizedChapterId) {
+      ownedChapter = await getOwnedChapter(supabase, normalizedChapterId, userId);
+      if (!normalizedBucketId && ownedChapter.bucket_id) {
+        normalizedBucketId = ownedChapter.bucket_id;
+      }
+    }
+
+    if (normalizedBucketId) {
+      await assertBucketOwnership(supabase, normalizedBucketId, userId);
+    }
+
+    if (ownedChapter?.bucket_id && normalizedBucketId && ownedChapter.bucket_id !== normalizedBucketId) {
+      throw new Error("선택한 챕터는 선택한 삶의 장면에 속하지 않습니다.");
+    }
 
     // 총 예상 시간 계산 — leaf 노드(자식이 없는 노드)만 합산
     const totalMinutes = data.subtasks
@@ -525,6 +587,21 @@ export async function saveTaskAction(data: {
     });
 
     if (error) throw new Error(`과제 저장 실패: ${error.message}`);
+
+    if (normalizedBucketId || normalizedChapterId) {
+      const { error: linkError } = await supabase
+        .from("tasks")
+        .update({
+          bucket_id: normalizedBucketId,
+          chapter_id: normalizedChapterId,
+        })
+        .eq("id", taskId)
+        .eq("user_id", userId);
+
+      if (linkError) {
+        throw new Error(`과제 연결 저장 실패: ${linkError.message}`);
+      }
+    }
 
     return { success: true, taskId };
   } catch (error) {

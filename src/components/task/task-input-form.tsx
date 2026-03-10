@@ -2,12 +2,12 @@
 
 // 과제 입력 폼 — 제목 필수 + 메모·단계 수·목표 시간·마감일 선택 확장 폼
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { saveMemoTemplateAction, deleteMemoTemplateAction } from "@/app/(main)/tasks/actions";
-import type { MemoTemplate, TaskInputData, UserContext } from "@/types";
+import type { Bucket, Chapter, MemoTemplate, TaskInputData, UserContext } from "@/types";
 
 // userContext별 placeholder 맵
 const PLACEHOLDERS: Record<UserContext | "default", string> = {
@@ -42,6 +42,10 @@ interface TaskInputFormProps {
   userContext?: UserContext[];
   memoTemplates?: MemoTemplate[];
   onTemplatesChange?: (templates: MemoTemplate[]) => void;
+  buckets?: Array<Pick<Bucket, "id" | "title">>;
+  chapters?: Array<Pick<Chapter, "id" | "title" | "bucket_id" | "status">>;
+  defaultBucketId?: string;
+  defaultChapterId?: string;
 }
 
 export function TaskInputForm({
@@ -50,6 +54,10 @@ export function TaskInputForm({
   userContext,
   memoTemplates = [],
   onTemplatesChange,
+  buckets = [],
+  chapters = [],
+  defaultBucketId,
+  defaultChapterId,
 }: TaskInputFormProps) {
   const [title, setTitle] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -57,6 +65,14 @@ export function TaskInputForm({
   const [subtaskCount, setSubtaskCount] = useState<number | undefined>(undefined);
   const [duration, setDuration] = useState<number | undefined>(undefined);
   const [dueDate, setDueDate] = useState("");
+  const [bucketId, setBucketId] = useState(() => defaultBucketId ?? "");
+  const [chapterId, setChapterId] = useState(() => {
+    if (!defaultChapterId) return "";
+    const matched = chapters.find((chapter) => chapter.id === defaultChapterId);
+    if (!matched) return "";
+    if (defaultBucketId && matched.bucket_id !== defaultBucketId) return "";
+    return defaultChapterId;
+  });
 
   // 메모 템플릿 저장 관련 상태
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
@@ -73,6 +89,12 @@ export function TaskInputForm({
   // 오늘 날짜 (min 값용)
   const today = new Date().toISOString().split("T")[0];
 
+  const bucketOptions = useMemo(() => buckets, [buckets]);
+  const availableChapters = useMemo(() => {
+    if (!bucketId) return [];
+    return chapters.filter((chapter) => chapter.bucket_id === bucketId);
+  }, [bucketId, chapters]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = title.trim();
@@ -84,6 +106,8 @@ export function TaskInputForm({
       desiredSubtaskCount: subtaskCount,
       targetDurationMinutes: duration,
       dueDate: dueDate || undefined,
+      bucketId: bucketId || undefined,
+      chapterId: chapterId || undefined,
     });
 
     // 확장 폼 접기
@@ -359,6 +383,65 @@ export function TaskInputForm({
             disabled={isLoading}
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
           />
+        </div>
+
+        {/* 버킷/챕터 연결 */}
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="task-bucket" className="text-sm font-medium">
+              연결할 삶의 장면 <span className="text-foreground/40 font-normal">(선택)</span>
+            </label>
+            <select
+              id="task-bucket"
+              value={bucketId}
+              onChange={(event) => {
+                const nextBucketId = event.target.value;
+                setBucketId(nextBucketId);
+
+                if (!nextBucketId) {
+                  setChapterId("");
+                  return;
+                }
+
+                if (!chapterId) return;
+                const selectedChapter = chapters.find((chapter) => chapter.id === chapterId);
+                if (!selectedChapter || selectedChapter.bucket_id !== nextBucketId) {
+                  setChapterId("");
+                }
+              }}
+              disabled={isLoading}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
+            >
+              <option value="">연결 안 함</option>
+              {bucketOptions.map((bucket) => (
+                <option key={bucket.id} value={bucket.id}>
+                  {bucket.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="task-chapter" className="text-sm font-medium">
+              연결할 챕터 <span className="text-foreground/40 font-normal">(선택)</span>
+            </label>
+            <select
+              id="task-chapter"
+              value={chapterId}
+              onChange={(event) => setChapterId(event.target.value)}
+              disabled={isLoading || !bucketId}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
+            >
+              <option value="">
+                {bucketId ? "챕터 선택 안 함" : "먼저 삶의 장면을 선택해주세요"}
+              </option>
+              {availableChapters.map((chapter) => (
+                <option key={chapter.id} value={chapter.id}>
+                  {chapter.title}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 

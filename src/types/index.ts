@@ -76,6 +76,8 @@ export interface TaskInputData {
   desiredSubtaskCount?: number; // undefined = AI 추천
   targetDurationMinutes?: number; // undefined = AI 추천
   dueDate?: string; // ISO date "YYYY-MM-DD"
+  bucketId?: string;
+  chapterId?: string;
 }
 
 export interface Subtask {
@@ -220,6 +222,12 @@ export interface FirstStepPlanResult {
   estimatedMinutes: number;
   difficulty: Difficulty;
   subtasks: AISubtaskSuggestion[];
+}
+
+export interface BucketDecompositionSuggestion {
+  chapterTitle: string;
+  chapterDescription: string;
+  firstAction: string;
 }
 
 export interface OnboardingV2SavePayload {

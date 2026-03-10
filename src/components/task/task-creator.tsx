@@ -9,7 +9,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { analyzeTaskAction, decomposeSubtaskAction, getMemoTemplatesAction, saveTaskAction } from "@/app/(main)/tasks/actions";
-import type { Difficulty, EditableSubtask, AISubtaskSuggestion, MemoTemplate, TaskInputData, UserContext } from "@/types";
+import type {
+  AISubtaskSuggestion,
+  Bucket,
+  Chapter,
+  Difficulty,
+  EditableSubtask,
+  MemoTemplate,
+  TaskInputData,
+  UserContext,
+} from "@/types";
 
 // 상태 타입
 type Phase = "input" | "analyzing" | "editing" | "saving";
@@ -182,9 +191,19 @@ function reducer(state: State, action: Action): State {
 
 interface TaskCreatorProps {
   userContext?: UserContext[];
+  buckets?: Array<Pick<Bucket, "id" | "title">>;
+  chapters?: Array<Pick<Chapter, "id" | "title" | "bucket_id" | "status">>;
+  defaultBucketId?: string;
+  defaultChapterId?: string;
 }
 
-export function TaskCreator({ userContext }: TaskCreatorProps) {
+export function TaskCreator({
+  userContext,
+  buckets = [],
+  chapters = [],
+  defaultBucketId,
+  defaultChapterId,
+}: TaskCreatorProps) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const { toast } = useToast();
 
@@ -249,6 +268,8 @@ export function TaskCreator({ userContext }: TaskCreatorProps) {
       desiredSubtaskCount: state.taskInputData?.desiredSubtaskCount,
       targetDurationMinutes: state.taskInputData?.targetDurationMinutes,
       dueDate: state.taskInputData?.dueDate,
+      bucketId: state.taskInputData?.bucketId,
+      chapterId: state.taskInputData?.chapterId,
     });
     if (result.success) {
       toast("과제가 저장되었습니다.", "success");
@@ -279,6 +300,10 @@ export function TaskCreator({ userContext }: TaskCreatorProps) {
               userContext={userContext}
               memoTemplates={memoTemplates}
               onTemplatesChange={setMemoTemplates}
+              buckets={buckets}
+              chapters={chapters}
+              defaultBucketId={defaultBucketId}
+              defaultChapterId={defaultChapterId}
             />
           </CardContent>
         </Card>
