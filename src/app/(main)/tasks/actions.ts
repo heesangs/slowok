@@ -13,6 +13,7 @@ import {
 } from "@/lib/ai/analyze";
 import type {
   AISubtaskSuggestion,
+  Difficulty,
   EditableSubtask,
   FirstStepPlanResult,
   Gender,
@@ -23,6 +24,20 @@ import type {
   Profile,
   TaskInputData,
 } from "@/types";
+
+interface DifficultyLearningProfile {
+  tendency: "easier" | "harder" | "neutral";
+  averageTimeMultiplier: number | null;
+  sampleSize: number;
+  note: string;
+}
+
+interface DifficultyAdjustmentRow {
+  ai_difficulty: Difficulty;
+  final_difficulty: Difficulty;
+  ai_estimated_minutes: number;
+  final_estimated_minutes: number;
+}
 
 // 인증된 사용자 ID 반환 (미인증 시 에러)
 async function getAuthUserId() {
@@ -101,6 +116,66 @@ function normalizeOptionalId(value: string | undefined) {
   return trimmed ? trimmed : null;
 }
 
+function difficultyRank(value: Difficulty) {
+  if (value === "easy") return 0;
+  if (value === "medium") return 1;
+  return 2;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+async function getDifficultyLearningProfile(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): Promise<DifficultyLearningProfile | null> {
+  const { data, error } = await supabase
+    .from("difficulty_adjustments")
+    .select("ai_difficulty, final_difficulty, ai_estimated_minutes, final_estimated_minutes")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(120);
+
+  if (error || !data || data.length < 3) {
+    return null;
+  }
+
+  const rows = data as DifficultyAdjustmentRow[];
+  let totalDifficultyDelta = 0;
+  let ratioSum = 0;
+  let ratioCount = 0;
+
+  for (const row of rows) {
+    totalDifficultyDelta += difficultyRank(row.final_difficulty) - difficultyRank(row.ai_difficulty);
+    if (row.ai_estimated_minutes > 0 && row.final_estimated_minutes > 0) {
+      ratioSum += row.final_estimated_minutes / row.ai_estimated_minutes;
+      ratioCount += 1;
+    }
+  }
+
+  const avgDelta = totalDifficultyDelta / rows.length;
+  const tendency: DifficultyLearningProfile["tendency"] =
+    avgDelta <= -0.25 ? "easier" : avgDelta >= 0.25 ? "harder" : "neutral";
+
+  const averageTimeMultiplier =
+    ratioCount > 0 ? clamp(ratioSum / ratioCount, 0.7, 1.4) : null;
+
+  const note =
+    tendency === "easier"
+      ? "사용자가 난이도를 낮추는 편이므로 진입 장벽이 낮은 단계를 우선 제안"
+      : tendency === "harder"
+        ? "사용자가 난이도를 높이는 편이므로 도전적인 단계를 일부 포함"
+        : "난이도 조정 경향은 크지 않아 기본 균형을 유지";
+
+  return {
+    tendency,
+    averageTimeMultiplier,
+    sampleSize: rows.length,
+    note,
+  };
+}
+
 // 서버 에러를 사용자 메시지로 안전하게 변환
 function toClientErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof Error)) return fallback;
@@ -162,11 +237,13 @@ export async function analyzeTaskAction(data: TaskInputData): Promise<{
   try {
     const { supabase, userId } = await getAuthUserId();
     const profile = await getProfile(supabase, userId);
+    const learningProfile = await getDifficultyLearningProfile(supabase, userId);
     const suggestions = await analyzeTask(data.title, profile, {
       memo: data.memo,
       desiredSubtaskCount: data.desiredSubtaskCount,
       targetDurationMinutes: data.targetDurationMinutes,
       dueDate: data.dueDate,
+      difficultyLearning: learningProfile,
     });
     return { success: true, data: suggestions };
   } catch (error) {
@@ -371,7 +448,8 @@ export async function decomposeSubtaskAction(
   try {
     const { supabase, userId } = await getAuthUserId();
     const profile = await getProfile(supabase, userId);
-    const suggestions = await decomposeSubtask(parentTitle, taskTitle, profile);
+    const learningProfile = await getDifficultyLearningProfile(supabase, userId);
+    const suggestions = await decomposeSubtask(parentTitle, taskTitle, profile, learningProfile);
     return { success: true, data: suggestions };
   } catch (error) {
     return {
@@ -574,6 +652,23 @@ export async function saveTaskAction(data: {
       sort_order: s.sort_order,
     }));
 
+    const adjustmentRows = data.subtasks
+      .filter((subtask) => {
+        const difficultyChanged = subtask.difficulty !== subtask.ai_suggested_difficulty;
+        const minutesChanged = Math.abs(subtask.estimated_minutes - subtask.ai_suggested_minutes) >= 5;
+        return difficultyChanged || minutesChanged;
+      })
+      .map((subtask) => ({
+        user_id: userId,
+        task_id: taskId,
+        subtask_id: subtask.temp_id,
+        source: "task_create" as const,
+        ai_difficulty: subtask.ai_suggested_difficulty,
+        final_difficulty: subtask.difficulty,
+        ai_estimated_minutes: subtask.ai_suggested_minutes,
+        final_estimated_minutes: subtask.estimated_minutes,
+      }));
+
     const { error } = await supabase.rpc("save_task_with_subtasks", {
       p_task_id: taskId,
       p_user_id: userId,
@@ -600,6 +695,16 @@ export async function saveTaskAction(data: {
 
       if (linkError) {
         throw new Error(`과제 연결 저장 실패: ${linkError.message}`);
+      }
+    }
+
+    if (adjustmentRows.length > 0) {
+      const { error: adjustmentError } = await supabase
+        .from("difficulty_adjustments")
+        .insert(adjustmentRows);
+
+      if (adjustmentError) {
+        console.error("difficulty_adjustments insert failed", adjustmentError);
       }
     }
 

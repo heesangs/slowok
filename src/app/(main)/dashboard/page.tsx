@@ -14,7 +14,13 @@ import {
   getReviewData,
   getUnstartedBucket,
 } from "@/lib/dashboard";
-import type { DashboardV2Data, TaskWithSubtasks } from "@/types";
+import type { DashboardV2Data, TaskCondition, TaskWithSubtasks } from "@/types";
+
+interface DashboardPageProps {
+  searchParams?: Promise<{
+    condition?: string;
+  }>;
+}
 
 function toErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message.trim().length > 0) {
@@ -23,7 +29,16 @@ function toErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-export default async function DashboardPage() {
+function parseCondition(value: string | undefined): TaskCondition {
+  if (value === "light" || value === "normal" || value === "focused" || value === "tired") {
+    return value;
+  }
+  return "normal";
+}
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const resolvedSearchParams = (await searchParams) ?? {};
+  const selectedCondition = parseCondition(resolvedSearchParams.condition);
   const supabase = await createClient();
   const {
     data: { user },
@@ -55,7 +70,7 @@ export default async function DashboardPage() {
       ] =
         await Promise.allSettled([
           getActiveChapters(supabase, user.id),
-          getDailyStep(supabase, user.id),
+          getDailyStep(supabase, user.id, selectedCondition),
           getLifeBalance(supabase, user.id),
           getUnstartedBucket(supabase, user.id),
           getReviewData(supabase, user.id),
@@ -108,6 +123,7 @@ export default async function DashboardPage() {
         profile,
         activeChapters,
         dailyStep,
+        selectedCondition,
         balance,
         suggestedBucket,
         review,

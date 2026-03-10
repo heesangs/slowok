@@ -18,7 +18,7 @@
 | Phase 1 — 온보딩 v2 | S1 | 완료 | 8/8 (100%) | Step1~4 + AI + 저장 + 리다이렉트 완료 |
 | Phase 2 — 대시보드 v2 | S2 | 완료 | 7/7 (100%) | 5섹션 + AllTasksView 구조 분리 완료 |
 | Phase 3 — 버킷/챕터 관리 | S3 | 완료 | 4/4 (100%) | 버킷/챕터 CRUD + task 연결 + bucket AI 분해 완료 |
-| Phase 4 — AI 고도화 | S4 | 미착수 | 0/4 (0%) | 매트릭스/학습/리뷰 미구현 |
+| Phase 4 — AI 고도화 | S4 | 완료 | 4/4 (100%) | 매트릭스/컨디션/학습/리뷰 구현 완료 |
 | Phase 5 — 톤/디자인 마감 | S5 | 부분 완료 | 2.5/3 | 카피/모바일 개선 일부 반영, 최종 QA 미완 |
 
 ---
@@ -69,14 +69,14 @@
 | SG-303 /tasks/new 버킷/챕터 연결 | 완료 | `src/app/(main)/tasks/new/page.tsx`, `src/components/task/task-input-form.tsx`, `src/components/task/task-creator.tsx`, `src/app/(main)/tasks/actions.ts` |
 | SG-304 decomposeBucketAction | 완료 | `src/lib/ai/analyze.ts`, `src/app/(main)/buckets/actions.ts`, `src/components/buckets/bucket-detail-content.tsx` |
 
-### Phase 4 (S4) — 미착수
+### Phase 4 (S4) — 완료
 
 | 티켓 | 상태 | 근거 |
 |---|---|---|
-| SG-401 성향×페이스 프롬프트 매트릭스 | 미착수 | task 분석 프롬프트에 매트릭스 로직 없음 |
-| SG-402 컨디션 추천 반영 | 미착수 | dashboard/task 추천 분기에 컨디션 로직 없음 |
-| SG-403 난이도 학습 테이블+로직 | 미착수 | 관련 마이그레이션/로직 없음 |
-| SG-404 /review 구현 + 인사이트 | 미착수 | `src/app/(main)/review/page.tsx` 없음 |
+| SG-401 성향×페이스 프롬프트 매트릭스 | 완료 | `src/lib/ai/analyze.ts` (`analyzeTask`, `decomposeSubtask`, `decomposeBucket`) |
+| SG-402 컨디션 추천 반영 | 완료 | `src/lib/dashboard/queries.ts`, `src/app/(main)/dashboard/page.tsx`, `src/components/dashboard/daily-step-card.tsx`, `dashboard-content-v2.tsx` |
+| SG-403 난이도 학습 테이블+로직 | 완료 | `supabase/migrations/20260311190000_add_difficulty_adjustments.sql`, `src/app/(main)/tasks/actions.ts`, `src/lib/ai/analyze.ts` |
+| SG-404 /review 구현 + 인사이트 | 완료 | `src/app/(main)/review/page.tsx`, `src/components/review/review-page-content.tsx`, `src/lib/stats.ts`, `src/components/dashboard/review-insight-card.tsx` |
 
 ### Phase 5 (S5) — 부분 완료
 
@@ -110,17 +110,16 @@
 
 ### C. Phase 4~5 진행
 
-1. SG-401~404: AI 고도화 + `/review` 구현
-2. SG-501~503: 톤 마감, QA, 점진 배포
+1. SG-501~503: 톤 마감, QA, 점진 배포
 
 ---
 
 ## 4) 즉시 착수 체크리스트 (이번 주)
 
-- [x] SG-301 `/buckets` 라우트 + CRUD 구현
-- [x] SG-302 `/buckets/[id]` 라우트 + chapter CRUD
-- [x] SG-303 `/tasks/new` bucket/chapter 연결 저장
-- [x] SG-304 bucket 분해 AI 액션 추가
+- [x] SG-401 성향×페이스 프롬프트 매트릭스 반영
+- [x] SG-402 컨디션 기반 추천 분기 반영
+- [x] SG-403 난이도 학습 테이블 + 반영 로직
+- [x] SG-404 `/review` 페이지 + 인사이트 연결
 - [x] lint/build 점검 후 상태 업데이트
 
 ---
@@ -141,6 +140,10 @@
 | 2026-03-11 | SG-302 | `/buckets/[id]` 상세 + chapter CRUD + `/tasks/new` 진입 버튼 구현, `pnpm lint`/`pnpm build` 통과 확인 | 완료 | SG-303 task 연결 저장 진행 |
 | 2026-03-11 | SG-303 | `/tasks/new`에 bucket/chapter 선택 UI + 기본값(query) + `saveTaskAction` 연결 저장/정합성 검증 구현, `pnpm lint`/`pnpm build` 통과 확인 | 완료 | SG-304 bucket 분해 AI 진행 |
 | 2026-03-11 | SG-304 | 버킷 분해 AI(`decomposeBucket`) + 성향×페이스 반영 + `/buckets/[id]` AI 제안 UI/챕터 추가 연결 구현, `pnpm lint`/`pnpm build` 통과 확인 | 완료 | Phase 4(SG-401) 착수 |
+| 2026-03-11 | SG-401 | `analyzeTask`, `decomposeSubtask`, `decomposeBucket` 프롬프트에 성향×페이스 매트릭스 규칙 주입, `pnpm lint`/`pnpm build` 통과 확인 | 완료 | SG-402 컨디션 추천 반영 진행 |
+| 2026-03-11 | SG-402 | 대시보드 컨디션 선택(가볍게/보통/집중/지침) + 조건별 오늘의 한 걸음 추천 분기 구현, `pnpm lint`/`pnpm build` 통과 확인 | 완료 | SG-403 난이도 학습 진행 |
+| 2026-03-11 | SG-403 | `difficulty_adjustments` 테이블 + RLS/인덱스 추가, `saveTaskAction` 조정 이력 적재, `analyzeTask`/`decomposeSubtask` 학습 힌트 반영, `pnpm lint`/`pnpm build` 통과 확인 | 완료 | SG-404 `/review` 구현 진행 |
+| 2026-03-11 | SG-404 | `/review` 페이지 구현, `stats` 기반 회고 집계/인사이트 공급, 대시보드 회고 카드 상세 이동 연결 구현 | 완료 | Phase 5(SG-501~503) 진행 |
 
 ---
 

@@ -52,7 +52,10 @@ export function DashboardContentV2({ data, allTasks, fetchError }: DashboardCont
         activeChapterTitle={activeChapter?.title}
       />
 
-      <DailyStepCard dailyStep={dailyStep} />
+      <DailyStepCard
+        dailyStep={dailyStep}
+        selectedCondition={data.selectedCondition}
+      />
       <LifeBalanceCard balance={data.balance} />
 
       <BucketSuggestionCard

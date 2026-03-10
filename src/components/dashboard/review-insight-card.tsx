@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { cn, formatMinutes, getDifficultyConfig } from "@/lib/utils";
 import type { ReviewSummary } from "@/types";
 
@@ -54,6 +55,13 @@ export function ReviewInsightCard({ review }: ReviewInsightCardProps) {
           </p>
         </div>
       )}
+
+      <Link
+        href="/review"
+        className="mt-3 inline-flex min-h-[36px] items-center rounded-lg border border-foreground/20 px-3 text-xs text-foreground/70 transition-colors hover:bg-foreground/5"
+      >
+        회고 자세히 보기
+      </Link>
     </section>
   );
 }

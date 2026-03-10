@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getReviewPageData } from "@/lib/stats";
 import type {
   Bucket,
   Chapter,
@@ -9,6 +10,7 @@ import type {
   ReviewSummary,
   Subtask,
   Task,
+  TaskCondition,
   TaskWithSubtasks,
 } from "@/types";
 
@@ -44,6 +46,90 @@ function getModeDifficulty(values: Array<Difficulty | null | undefined>): Diffic
   return sorted[0][0] as Difficulty;
 }
 
+function getTaskDifficulty(task: TaskWithSubtasks): Difficulty {
+  const subtasks = task.subtasks ?? [];
+  if (subtasks.length === 0) return "medium";
+
+  const leafSubtasks = subtasks.filter((item) => isSubtaskLeaf(item, subtasks));
+  const base = leafSubtasks.length > 0 ? leafSubtasks : subtasks;
+  const mode = getModeDifficulty(base.map((item) => item.difficulty));
+  return mode ?? "medium";
+}
+
+function getTaskEstimatedMinutes(task: TaskWithSubtasks) {
+  if (typeof task.total_estimated_minutes === "number" && task.total_estimated_minutes > 0) {
+    return task.total_estimated_minutes;
+  }
+
+  const subtasks = task.subtasks ?? [];
+  const leafSubtasks = subtasks.filter((item) => isSubtaskLeaf(item, subtasks));
+  const base = leafSubtasks.length > 0 ? leafSubtasks : subtasks;
+  const sum = base.reduce((acc, cur) => acc + (cur.estimated_minutes ?? 0), 0);
+  return sum > 0 ? sum : 15;
+}
+
+function difficultyToScore(value: Difficulty) {
+  if (value === "easy") return 0;
+  if (value === "medium") return 1;
+  return 2;
+}
+
+function scoreTaskByCondition(task: TaskWithSubtasks, condition: TaskCondition) {
+  const minutes = getTaskEstimatedMinutes(task);
+  const difficulty = getTaskDifficulty(task);
+  const difficultyScore = difficultyToScore(difficulty);
+  const statusBoost = task.status === "in_progress" ? 15 : 0;
+  const dailyBoost = task.is_daily_step ? 20 : 0;
+  const conditionBoost = task.condition === condition ? 18 : 0;
+
+  if (condition === "focused") {
+    const longTaskBoost = Math.min(minutes, 90) * 0.45;
+    const difficultyBoost = difficultyScore * 14;
+    const tooShortPenalty = minutes < 20 ? 12 : 0;
+    return statusBoost + dailyBoost + conditionBoost + longTaskBoost + difficultyBoost - tooShortPenalty;
+  }
+
+  if (condition === "light") {
+    const shortTaskBoost = Math.max(0, 35 - minutes) * 1.1;
+    const difficultyBoost = difficulty === "easy" ? 18 : difficulty === "medium" ? 8 : -10;
+    return statusBoost + dailyBoost + conditionBoost + shortTaskBoost + difficultyBoost;
+  }
+
+  if (condition === "tired") {
+    const ultraShortBoost = Math.max(0, 25 - minutes) * 1.2;
+    const difficultyBoost = difficulty === "easy" ? 20 : difficulty === "medium" ? 6 : -16;
+    return statusBoost + dailyBoost + conditionBoost + ultraShortBoost + difficultyBoost;
+  }
+
+  const targetMinutes = 30;
+  const closenessPenalty = Math.abs(minutes - targetMinutes) * 0.6;
+  const difficultyBalanceBoost = difficulty === "medium" ? 10 : difficulty === "easy" ? 4 : 0;
+  return statusBoost + dailyBoost + conditionBoost + difficultyBalanceBoost - closenessPenalty;
+}
+
+function pickTaskByCondition(
+  tasks: TaskWithSubtasks[],
+  condition: TaskCondition
+): TaskWithSubtasks | null {
+  if (tasks.length === 0) return null;
+
+  if (condition === "normal") {
+    const preferred = tasks.find((task) => task.is_daily_step);
+    if (preferred) return preferred;
+  }
+
+  const ranked = [...tasks].sort((a, b) => {
+    const scoreDiff = scoreTaskByCondition(b, condition) - scoreTaskByCondition(a, condition);
+    if (scoreDiff !== 0) return scoreDiff;
+
+    const aTime = new Date(a.created_at).getTime();
+    const bTime = new Date(b.created_at).getTime();
+    return bTime - aTime;
+  });
+
+  return ranked[0] ?? null;
+}
+
 function hashSeed(value: string) {
   let hash = 0;
   for (let i = 0; i < value.length; i += 1) {
@@ -68,42 +154,6 @@ function buildBalanceMessage(insight: LifeBalanceInsight) {
     parts.push(`${insight.steadyArea} 영역은 작게라도 꾸준히 이어가고 있어요.`);
   }
   return parts.join(" ");
-}
-
-function buildReviewInsight(tasks: Task[]) {
-  const completedTimes = tasks
-    .map((task) => task.completed_at)
-    .filter((value): value is string => Boolean(value))
-    .map((value) => new Date(value).getHours());
-
-  const morningCount = completedTimes.filter((hour) => hour >= 5 && hour < 12).length;
-  const eveningCount = completedTimes.filter((hour) => hour >= 18 && hour < 24).length;
-
-  const estimated = tasks
-    .map((task) => task.total_estimated_minutes)
-    .filter((value): value is number => typeof value === "number" && value > 0);
-  const actual = tasks
-    .map((task) => task.total_actual_minutes)
-    .filter((value): value is number => typeof value === "number" && value > 0);
-
-  const avgEstimated =
-    estimated.length > 0 ? estimated.reduce((acc, cur) => acc + cur, 0) / estimated.length : 0;
-  const avgActual =
-    actual.length > 0 ? actual.reduce((acc, cur) => acc + cur, 0) / actual.length : 0;
-
-  if (morningCount >= eveningCount + 2 && morningCount >= 3) {
-    return "요즘 당신은 오전에 작은 할 일을 잘 해내는 흐름을 보이고 있어요.";
-  }
-
-  if (avgEstimated > 0 && avgActual > avgEstimated * 1.3) {
-    return "예상 시간을 조금 넉넉히 잡으면 시작 부담이 더 줄어들 수 있어요.";
-  }
-
-  if (avgEstimated >= 30) {
-    return "30분 내외의 한 걸음에서 가장 안정적인 리듬을 보이고 있어요.";
-  }
-
-  return "작은 실행을 꾸준히 이어가는 힘이 점점 더 단단해지고 있어요.";
 }
 
 export async function getProfile(supabase: DashboardSupabase, userId: string): Promise<Profile | null> {
@@ -149,44 +199,25 @@ export async function getActiveChapters(
 
 export async function getDailyStep(
   supabase: DashboardSupabase,
-  userId: string
+  userId: string,
+  condition: TaskCondition = "normal"
 ): Promise<TaskWithSubtasks | null> {
   try {
     const baseSelect = "*, subtasks(*), bucket:buckets(id, title)";
-    const statusFilter = ["pending", "in_progress"];
-
-    const { data: preferred, error: preferredError } = await supabase
+    const { data, error } = await supabase
       .from("tasks")
       .select(baseSelect)
       .eq("user_id", userId)
-      .eq("is_daily_step", true)
-      .in("status", statusFilter)
+      .in("status", ["pending", "in_progress"])
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(60);
 
-    if (preferredError) {
-      throw preferredError;
+    if (error) {
+      throw error;
     }
 
-    if (preferred) {
-      return preferred as TaskWithSubtasks;
-    }
-
-    const { data: fallback, error: fallbackError } = await supabase
-      .from("tasks")
-      .select(baseSelect)
-      .eq("user_id", userId)
-      .in("status", statusFilter)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (fallbackError) {
-      throw fallbackError;
-    }
-
-    return (fallback as TaskWithSubtasks | null) ?? null;
+    const candidates = (data as TaskWithSubtasks[] | null) ?? [];
+    return pickTaskByCondition(candidates, condition);
   } catch (error) {
     throw toClientError(error, "오늘의 한 걸음을 불러오지 못했습니다.");
   }
@@ -339,44 +370,8 @@ export async function getReviewData(
   userId: string
 ): Promise<ReviewSummary | null> {
   try {
-    const { data, error } = await supabase
-      .from("tasks")
-      .select("id, memo, title, status, created_at, completed_at, total_estimated_minutes, total_actual_minutes, subtasks(*)")
-      .eq("user_id", userId)
-      .eq("status", "completed")
-      .order("completed_at", { ascending: false })
-      .limit(20);
-
-    if (error) {
-      throw error;
-    }
-
-    const completedTasks = (data as TaskWithSubtasks[] | null) ?? [];
-    if (completedTasks.length === 0) return null;
-
-    const latest = completedTasks[0];
-    const latestSubtasks = latest.subtasks ?? [];
-    const leafSubtasks = latestSubtasks.filter((subtask) => isSubtaskLeaf(subtask, latestSubtasks));
-    const recentDifficultyAfter = getModeDifficulty(leafSubtasks.map((subtask) => subtask.difficulty));
-    const recentDifficultyBefore = getModeDifficulty(
-      leafSubtasks.map((subtask) => subtask.ai_suggested_difficulty)
-    );
-
-    const summary: ReviewSummary = {
-      completedCount: completedTasks.length,
-      recentEstimatedMinutes: latest.total_estimated_minutes ?? null,
-      recentActualMinutes: latest.total_actual_minutes ?? null,
-      recentDifficultyBefore,
-      recentDifficultyAfter,
-      recentMemo: latest.memo ?? null,
-      insight: null,
-    };
-
-    if (completedTasks.length >= 6) {
-      summary.insight = buildReviewInsight(completedTasks);
-    }
-
-    return summary;
+    const reviewData = await getReviewPageData(supabase, userId);
+    return reviewData?.summary ?? null;
   } catch (error) {
     throw toClientError(error, "회고 데이터를 불러오지 못했습니다.");
   }

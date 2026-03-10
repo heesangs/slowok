@@ -259,10 +259,52 @@ export interface ReviewSummary {
   insight: string | null;
 }
 
+export type ReviewTimeBand = "morning" | "afternoon" | "evening" | "night";
+
+export interface ReviewTimeBandStat {
+  band: ReviewTimeBand;
+  label: string;
+  count: number;
+}
+
+export interface DifficultyLearningSummary {
+  tendency: "easier" | "harder" | "neutral";
+  sampleSize: number;
+  averageTimeMultiplier: number | null;
+}
+
+export interface ReviewRecentItem {
+  id: string;
+  title: string;
+  completedAt: string;
+  estimatedMinutes: number | null;
+  actualMinutes: number | null;
+  difficultyBefore: Difficulty | null;
+  difficultyAfter: Difficulty | null;
+  memo: string | null;
+  bucketTitle: string | null;
+  lifeAreaName: string | null;
+}
+
+export interface ReviewPageData {
+  completedCount: number;
+  completedInLast14Days: number;
+  averageEstimatedMinutes: number | null;
+  averageActualMinutes: number | null;
+  averageGapMinutes: number | null;
+  strongestBand: ReviewTimeBand | null;
+  timeBandStats: ReviewTimeBandStat[];
+  learning: DifficultyLearningSummary;
+  insight: string | null;
+  summary: ReviewSummary | null;
+  recent: ReviewRecentItem[];
+}
+
 export interface DashboardV2Data {
   profile: Profile;
   activeChapters: Chapter[];
   dailyStep: TaskWithSubtasks | null;
+  selectedCondition: TaskCondition;
   balance: LifeBalanceInsight | null;
   suggestedBucket: Bucket | null;
   review: ReviewSummary | null;

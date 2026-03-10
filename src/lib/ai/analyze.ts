@@ -22,6 +22,37 @@ const HORIZON_LABELS: Record<HorizonAction["level"], string> = {
   this_season: "이번 시즌",
   this_week: "이번 주",
 };
+const PERSONALITY_OPTIONS = ["IT", "IF", "ET", "EF"] as const;
+const PACE_OPTIONS = ["slow", "balanced", "focused", "recovery"] as const;
+
+type PersonalityOption = (typeof PERSONALITY_OPTIONS)[number];
+type PaceOption = (typeof PACE_OPTIONS)[number];
+type PersonalityPaceKey = `${PersonalityOption}|${PaceOption}`;
+
+const PERSONALITY_BASE_RULES: Record<PersonalityOption, string> = {
+  IT: "논리적 순서와 명확한 기준으로 단계를 구성한다.",
+  IF: "의미와 몰입을 느낄 수 있도록 감정 부담을 낮춘다.",
+  ET: "행동-피드백-개선 순환이 빠르게 돌아가도록 구성한다.",
+  EF: "사람과의 연결, 공감, 협업 가능성을 반영한다.",
+};
+
+const PACE_BASE_RULES: Record<PaceOption, string> = {
+  slow: "작은 단위를 자주 실천할 수 있도록 10~20분 마이크로 단계로 쪼갠다.",
+  balanced: "20~40분 기준으로 안정적인 리듬을 유지한다.",
+  focused: "집중 세션 중심으로 깊이 있게 진행하되 준비/마무리 단계를 붙인다.",
+  recovery: "에너지 소모가 낮은 5~15분 시작 행동을 우선 제시한다.",
+};
+
+const PERSONALITY_PACE_MATRIX_RULES: Partial<Record<PersonalityPaceKey, string>> = {
+  "IT|slow": "체계적 체크리스트와 매일 짧은 분석 단계를 중심으로 제시한다.",
+  "IT|focused": "깊은 리서치와 집중 세션 중심으로 제시한다.",
+  "IF|slow": "성찰/의미 중심의 작은 단계로 심리적 진입장벽을 낮춘다.",
+  "IF|recovery": "감정 상태 점검 후 5분 시작 행동으로 연결한다.",
+  "ET|focused": "사람과 함께하는 집중 활동과 빠른 실행을 제시한다.",
+  "ET|balanced": "실행 후 즉시 피드백을 반영하는 순환형 단계를 제시한다.",
+  "EF|slow": "관계 중심의 작은 실천을 꾸준히 이어가게 제시한다.",
+  "EF|recovery": "가벼운 대화/연결 기반의 저부담 행동을 우선 제시한다.",
+};
 
 // 기존 학생 학년 여부 판별 (legacy 유저 호환)
 function isLegacyStudentGrade(grade: string | null | undefined): boolean {
@@ -339,6 +370,14 @@ interface TaskAnalysisHints {
   desiredSubtaskCount?: number;
   targetDurationMinutes?: number;
   dueDate?: string;
+  difficultyLearning?: DifficultyLearningHint | null;
+}
+
+interface DifficultyLearningHint {
+  tendency: "easier" | "harder" | "neutral";
+  averageTimeMultiplier: number | null;
+  sampleSize: number;
+  note: string;
 }
 
 interface DecomposeBucketInput {
@@ -348,36 +387,130 @@ interface DecomposeBucketInput {
   existingChapterTitles?: string[];
 }
 
-function buildPersonalityHint(personalityType: Profile["personality_type"] | undefined | null): string {
-  if (personalityType === "IT") {
-    return "성향 IT: 분석적이고 체계적으로, 측정 가능한 작은 단계를 제시";
+function normalizePersonalityType(
+  value: Profile["personality_type"] | undefined | null
+): PersonalityOption | null {
+  if (value && PERSONALITY_OPTIONS.includes(value as PersonalityOption)) {
+    return value as PersonalityOption;
   }
-  if (personalityType === "IF") {
-    return "성향 IF: 의미와 몰입을 살리는 조용한 실천 단계를 제시";
-  }
-  if (personalityType === "ET") {
-    return "성향 ET: 실행 속도와 결과를 빠르게 확인할 수 있는 단계를 제시";
-  }
-  if (personalityType === "EF") {
-    return "성향 EF: 사람과 연결되고 공감을 얻을 수 있는 단계를 제시";
-  }
-  return "성향 정보 없음: 부담이 낮고 명확한 실행 단계로 제시";
+  return null;
 }
 
-function buildPaceHint(paceType: Profile["pace_type"] | undefined | null): string {
-  if (paceType === "slow") {
-    return "페이스 slow: 매일 10~20분 정도의 아주 작은 행동 중심으로 제시";
+function normalizePaceType(value: Profile["pace_type"] | undefined | null): PaceOption | null {
+  if (value && PACE_OPTIONS.includes(value as PaceOption)) {
+    return value as PaceOption;
   }
-  if (paceType === "balanced") {
-    return "페이스 balanced: 20~40분 정도의 안정적인 리듬으로 제시";
+  return null;
+}
+
+function buildPersonalityPaceHints(profile: Profile | null): {
+  summary: string;
+  rules: string[];
+} {
+  const personality = normalizePersonalityType(profile?.personality_type);
+  const pace = normalizePaceType(profile?.pace_type);
+  const summary = `${personality ?? "미정"} × ${pace ?? "미정"}`;
+  const rules: string[] = [];
+  let hasMatrixRule = false;
+
+  if (personality && pace) {
+    const matrixRule = PERSONALITY_PACE_MATRIX_RULES[`${personality}|${pace}`];
+    if (matrixRule) {
+      rules.push(matrixRule);
+      hasMatrixRule = true;
+    }
   }
-  if (paceType === "focused") {
-    return "페이스 focused: 주 2회 집중 세션형 행동을 포함해 제시";
+
+  if (!hasMatrixRule && personality) {
+    rules.push(PERSONALITY_BASE_RULES[personality]);
   }
-  if (paceType === "recovery") {
-    return "페이스 recovery: 에너지 소모가 낮은 5~15분 행동 중심으로 제시";
+  if (!hasMatrixRule && pace) {
+    rules.push(PACE_BASE_RULES[pace]);
   }
-  return "페이스 정보 없음: 무리 없는 기본 페이스로 제시";
+
+  if (rules.length === 0) {
+    rules.push("성향/페이스 정보가 없으면 부담이 낮고 명확한 기본 실행 단계를 제시한다.");
+  }
+
+  return { summary, rules };
+}
+
+function buildPersonalityPacePromptBlock(profile: Profile | null): string {
+  const hints = buildPersonalityPaceHints(profile);
+  const rulesBlock = hints.rules.map((rule) => `- ${rule}`).join("\n");
+  return `성향×페이스 매트릭스:
+- 조합: ${hints.summary}
+${rulesBlock}`;
+}
+
+function shiftDifficultyByTendency(
+  difficulty: Difficulty,
+  tendency: DifficultyLearningHint["tendency"]
+): Difficulty {
+  if (tendency === "easier") {
+    if (difficulty === "hard") return "medium";
+    if (difficulty === "medium") return "easy";
+  }
+  if (tendency === "harder") {
+    if (difficulty === "easy") return "medium";
+    if (difficulty === "medium") return "hard";
+  }
+  return difficulty;
+}
+
+function applyDifficultyLearning(
+  suggestions: AISubtaskSuggestion[],
+  learning: DifficultyLearningHint | null | undefined,
+  minMinutes: number,
+  maxMinutes: number
+): AISubtaskSuggestion[] {
+  if (!learning || learning.sampleSize < 3) {
+    return suggestions;
+  }
+
+  const multiplier = learning.averageTimeMultiplier
+    ? Math.max(0.8, Math.min(1.3, learning.averageTimeMultiplier))
+    : 1;
+
+  return suggestions.map((item) => ({
+    ...item,
+    difficulty:
+      learning.sampleSize >= 8
+        ? shiftDifficultyByTendency(item.difficulty, learning.tendency)
+        : item.difficulty,
+    estimated_minutes: normalizeEstimatedMinutes(
+      Math.round(item.estimated_minutes * multiplier),
+      minMinutes,
+      maxMinutes,
+      item.estimated_minutes
+    ),
+  }));
+}
+
+function buildDifficultyLearningPromptBlock(
+  learning: DifficultyLearningHint | null | undefined
+): string {
+  if (!learning || learning.sampleSize < 3) {
+    return "난이도 학습 힌트: 아직 충분한 조정 이력이 없어 기본 추천을 사용";
+  }
+
+  const tendencyLabel =
+    learning.tendency === "easier"
+      ? "사용자가 보통 더 쉽게 조정"
+      : learning.tendency === "harder"
+        ? "사용자가 보통 더 도전적으로 조정"
+        : "난이도 조정 경향은 중립";
+
+  const multiplierLabel =
+    typeof learning.averageTimeMultiplier === "number"
+      ? `${learning.averageTimeMultiplier.toFixed(2)}배`
+      : "중립";
+
+  return `난이도 학습 힌트:
+- 샘플 수: ${learning.sampleSize}
+- 난이도 경향: ${tendencyLabel}
+- 시간 조정 배율: ${multiplierLabel}
+- 참고 메모: ${learning.note}`;
 }
 
 function buildFallbackBucketSuggestions(
@@ -497,11 +630,15 @@ export async function analyzeTask(
   const hintsBlock = [memoHint, durationHint, dueDateHint]
     .filter(Boolean)
     .join("\n");
+  const personalityPaceBlock = buildPersonalityPacePromptBlock(profile);
+  const difficultyLearningBlock = buildDifficultyLearningPromptBlock(hints?.difficultyLearning);
 
   const prompt = `${buildSystemIdentity(profile)}
 
 ${profileLabel}
 ${buildProfileContext(profile)}
+${personalityPaceBlock}
+${difficultyLearningBlock}
 
 ${taskLabel} ${countHint}
 각 하위 과제에 대해 난이도(easy/medium/hard)와 예상 소요 시간(분)을 제안해주세요.
@@ -510,6 +647,8 @@ ${taskLabel} ${countHint}
 - 쉬운 과제는 넉넉한 시간이 아니라 빠르게 처리할 수 있도록 짧은 시간을 제안
 - 어려운 과제는 충분히 여유로운 시간을 제안 (서두르지 않도록)
 - ${levelLabel} 시간을 조정
+- 성향×페이스 매트릭스 지침을 단계 구성과 시간 추정에 반영
+- 난이도 학습 힌트를 참고해 사용자의 조정 경향에 맞춤
 - 최소 5분, 최대 120분 범위
 
 할 일: "${taskTitle}"
@@ -533,11 +672,13 @@ ${hintsBlock ? hintsBlock + "\n" : ""}
     throw new Error("AI 응답이 올바르지 않습니다.");
   }
 
-  return parsed.map((item) => ({
+  const normalized = parsed.map((item) => ({
     title: String(item.title),
     difficulty: (["easy", "medium", "hard"].includes(item.difficulty) ? item.difficulty : "medium") as AISubtaskSuggestion["difficulty"],
     estimated_minutes: Math.max(5, Math.min(120, Math.round(Number(item.estimated_minutes) || 15))),
   }));
+
+  return applyDifficultyLearning(normalized, hints?.difficultyLearning, 5, 120);
 }
 
 /**
@@ -843,18 +984,23 @@ ${currentSubtasks || "(세부 단계 없음)"}
 export async function decomposeSubtask(
   parentTitle: string,
   taskTitle: string,
-  profile: Profile | null
+  profile: Profile | null,
+  difficultyLearning?: DifficultyLearningHint | null
 ): Promise<AISubtaskSuggestion[]> {
   const studentOnly = isStudentOnly(profile);
   const levelLabel = studentOnly ? "학생의 수준을 고려" : "사용자의 수준을 고려";
   const profileLabel = studentOnly ? "학생 정보:" : "사용자 정보:";
   const taskLabel = studentOnly ? "상위 과제" : "상위 할 일";
   const subtaskLabel = studentOnly ? "분해할 하위 과제" : "분해할 세부 항목";
+  const personalityPaceBlock = buildPersonalityPacePromptBlock(profile);
+  const difficultyLearningBlock = buildDifficultyLearningPromptBlock(difficultyLearning);
 
   const prompt = `${buildSystemIdentity(profile)}
 
 ${profileLabel}
 ${buildProfileContext(profile)}
+${personalityPaceBlock}
+${difficultyLearningBlock}
 
 ${taskLabel}: "${taskTitle}"
 ${subtaskLabel}: "${parentTitle}"
@@ -865,6 +1011,8 @@ ${subtaskLabel}: "${parentTitle}"
 규칙:
 - 쉬운 단계는 짧은 시간, 어려운 단계는 여유로운 시간
 - ${levelLabel}
+- 성향×페이스 매트릭스 지침을 단계 분해 방식에 반영
+- 난이도 학습 힌트를 참고해 사용자의 조정 경향에 맞춤
 - 최소 5분, 최대 60분 범위
 
 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요:
@@ -885,11 +1033,13 @@ ${subtaskLabel}: "${parentTitle}"
     throw new Error("AI 응답이 올바르지 않습니다.");
   }
 
-  return parsed.map((item) => ({
+  const normalized = parsed.map((item) => ({
     title: String(item.title),
     difficulty: (["easy", "medium", "hard"].includes(item.difficulty) ? item.difficulty : "medium") as AISubtaskSuggestion["difficulty"],
     estimated_minutes: Math.max(5, Math.min(60, Math.round(Number(item.estimated_minutes) || 10))),
   }));
+
+  return applyDifficultyLearning(normalized, difficultyLearning, 5, 60);
 }
 
 /**
@@ -908,8 +1058,7 @@ export async function decomposeBucket(
     .filter(Boolean)
     .slice(0, 12);
 
-  const personalityHint = buildPersonalityHint(input.profile?.personality_type);
-  const paceHint = buildPaceHint(input.profile?.pace_type);
+  const personalityPaceBlock = buildPersonalityPacePromptBlock(input.profile);
   const horizonLabel = HORIZON_LABELS[input.horizon];
 
   const prompt = `당신은 slowgoes 앱의 버킷 분해 코치입니다.
@@ -923,8 +1072,7 @@ export async function decomposeBucket(
 - 기존 챕터 제목: ${existingChapterTitles.length > 0 ? existingChapterTitles.join(" | ") : "없음"}
 
 성향/페이스 적용 규칙:
-- ${personalityHint}
-- ${paceHint}
+${personalityPaceBlock}
 
 출력 규칙:
 - 2~4개의 챕터를 제안

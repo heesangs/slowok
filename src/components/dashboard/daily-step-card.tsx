@@ -3,11 +3,19 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { formatMinutes, getDifficultyConfig } from "@/lib/utils";
-import type { Difficulty, Subtask, TaskWithSubtasks } from "@/types";
+import type { Difficulty, Subtask, TaskCondition, TaskWithSubtasks } from "@/types";
 
 interface DailyStepCardProps {
   dailyStep: TaskWithSubtasks | null;
+  selectedCondition: TaskCondition;
 }
+
+const CONDITION_OPTIONS: Array<{ value: TaskCondition; label: string; hint: string }> = [
+  { value: "light", label: "가볍게", hint: "짧고 부담이 낮은 한 걸음을 우선 추천해요." },
+  { value: "normal", label: "보통", hint: "현재 흐름에서 안정적으로 이어갈 한 걸음을 추천해요." },
+  { value: "focused", label: "집중", hint: "핵심 성과를 만들 수 있는 집중형 한 걸음을 추천해요." },
+  { value: "tired", label: "지침", hint: "에너지가 낮아도 바로 시작할 수 있는 한 걸음을 추천해요." },
+];
 
 function isLeafSubtask(target: Subtask, all: Subtask[]) {
   return !all.some((item) => item.parent_subtask_id === target.id);
@@ -41,10 +49,34 @@ function getTaskMinutes(task: TaskWithSubtasks) {
   return sum > 0 ? sum : 5;
 }
 
-export function DailyStepCard({ dailyStep }: DailyStepCardProps) {
+export function DailyStepCard({ dailyStep, selectedCondition }: DailyStepCardProps) {
+  const activeCondition =
+    CONDITION_OPTIONS.find((option) => option.value === selectedCondition) ?? CONDITION_OPTIONS[1];
+
   return (
     <section className="rounded-xl border border-foreground/10 px-4 py-4">
-      <p className="text-sm text-foreground/60 mb-2">오늘의 한 걸음</p>
+      <div className="flex flex-col gap-2 mb-3">
+        <p className="text-sm text-foreground/60">오늘의 한 걸음</p>
+        <div className="flex flex-wrap gap-2">
+          {CONDITION_OPTIONS.map((option) => {
+            const isActive = option.value === selectedCondition;
+            return (
+              <Link
+                key={option.value}
+                href={`/dashboard?condition=${option.value}`}
+                className={`rounded-full px-3 py-1.5 text-xs min-h-[36px] inline-flex items-center transition-colors ${
+                  isActive
+                    ? "bg-foreground text-background"
+                    : "border border-foreground/20 text-foreground/80 hover:bg-foreground/5"
+                }`}
+              >
+                {option.label}
+              </Link>
+            );
+          })}
+        </div>
+        <p className="text-xs text-foreground/60">{activeCondition.hint}</p>
+      </div>
 
       {dailyStep ? (
         <Link href={`/tasks/${dailyStep.id}`} className="block">

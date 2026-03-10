@@ -37,6 +37,25 @@ export default function MainLayout({
               </svg>
             </Link>
             <Link
+              href="/review"
+              className="inline-flex items-center justify-center rounded-lg p-2 transition-colors hover:bg-foreground/5"
+              aria-label="회고"
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8.625 9.75h6.75m-6.75 3h4.5M3.75 6.75A2.25 2.25 0 016 4.5h12a2.25 2.25 0 012.25 2.25v8.25A2.25 2.25 0 0118 17.25H10.5l-3.75 2.25v-2.25H6A2.25 2.25 0 013.75 15V6.75z"
+                />
+              </svg>
+            </Link>
+            <Link
               href="/profile"
               className="inline-flex items-center justify-center rounded-lg p-2 transition-colors hover:bg-foreground/5"
               aria-label="프로필"
