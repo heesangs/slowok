@@ -1,5 +1,3 @@
-// 대시보드 페이지 — 전체 할일 요약 (Server Component)
-
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DashboardContent } from "@/components/dashboard/dashboard-content";
@@ -7,18 +5,18 @@ import { DashboardContentV2 } from "@/components/dashboard/dashboard-content-v2"
 import { DashboardEmpty } from "@/components/dashboard/dashboard-empty";
 import { featureFlags } from "@/lib/flags";
 import {
-  getActiveChapters,
-  getDailyStep,
-  getLifeBalance,
+  getDailyTodos,
+  getHorizonAnalysis,
   getProfile,
-  getReviewData,
-  getUnstartedBucket,
+  getRoutinesWithCompletions,
+  getSelectedBucket,
+  getUserBuckets,
 } from "@/lib/dashboard";
-import type { DashboardV2Data, TaskCondition, TaskWithSubtasks } from "@/types";
+import type { DashboardV2Data, TaskWithSubtasks } from "@/types";
 
 interface DashboardPageProps {
   searchParams?: Promise<{
-    condition?: string;
+    bucket?: string;
   }>;
 }
 
@@ -29,22 +27,14 @@ function toErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-function parseCondition(value: string | undefined): TaskCondition {
-  if (value === "light" || value === "normal" || value === "focused" || value === "tired") {
-    return value;
-  }
-  return "normal";
-}
-
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const resolvedSearchParams = (await searchParams) ?? {};
-  const selectedCondition = parseCondition(resolvedSearchParams.condition);
+  const selectedBucketQuery = resolvedSearchParams.bucket?.trim();
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // 미로그인 시 로그인 페이지로 리다이렉트
   if (!user) {
     redirect("/login");
   }
@@ -53,93 +43,84 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const dashboardV2Enabled = featureFlags.dashboardV2(user.id);
 
   if (dashboardV2Enabled) {
-    const profile = await getProfile(supabase, user.id);
+    const errors: string[] = [];
+
+    const [profileResult, bucketsResult] = await Promise.allSettled([
+      getProfile(supabase, user.id),
+      getUserBuckets(supabase, user.id),
+    ]);
+
+    const profile =
+      profileResult.status === "fulfilled"
+        ? profileResult.value
+        : (errors.push(toErrorMessage(profileResult.reason, "프로필 정보를 불러오지 못했습니다.")), null);
+
     if (!profile) {
       if (onboardingV2Enabled) {
         redirect("/onboarding");
       }
-    } else {
-      const errors: string[] = [];
-      const [
-        activeChaptersResult,
-        dailyStepResult,
-        balanceResult,
-        suggestedBucketResult,
-        reviewResult,
-        allTasksResult,
-      ] =
-        await Promise.allSettled([
-          getActiveChapters(supabase, user.id),
-          getDailyStep(supabase, user.id, selectedCondition),
-          getLifeBalance(supabase, user.id),
-          getUnstartedBucket(supabase, user.id),
-          getReviewData(supabase, user.id),
-          (async () => {
-            const { data, error } = await supabase
-              .from("tasks")
-              .select("*, subtasks(*), bucket:buckets(id, title)")
-              .eq("user_id", user.id)
-              .order("created_at", { ascending: false });
-
-            if (error) {
-              throw error;
-            }
-
-            return (data as TaskWithSubtasks[] | null) ?? [];
-          })(),
-        ]);
-
-      const activeChapters =
-        activeChaptersResult.status === "fulfilled"
-          ? activeChaptersResult.value
-          : (errors.push(toErrorMessage(activeChaptersResult.reason, "챕터 정보를 불러오지 못했습니다.")), []);
-
-      const dailyStep =
-        dailyStepResult.status === "fulfilled"
-          ? dailyStepResult.value
-          : (errors.push(toErrorMessage(dailyStepResult.reason, "오늘의 한 걸음을 불러오지 못했습니다.")), null);
-
-      const balance =
-        balanceResult.status === "fulfilled"
-          ? balanceResult.value
-          : (errors.push(toErrorMessage(balanceResult.reason, "인생균형 정보를 불러오지 못했습니다.")), null);
-
-      const suggestedBucket =
-        suggestedBucketResult.status === "fulfilled"
-          ? suggestedBucketResult.value
-          : (errors.push(toErrorMessage(suggestedBucketResult.reason, "버킷 추천을 불러오지 못했습니다.")), null);
-
-      const review =
-        reviewResult.status === "fulfilled"
-          ? reviewResult.value
-          : (errors.push(toErrorMessage(reviewResult.reason, "회고 데이터를 불러오지 못했습니다.")), null);
-
-      const allTasks =
-        allTasksResult.status === "fulfilled"
-          ? allTasksResult.value
-          : (errors.push(toErrorMessage(allTasksResult.reason, "전체 과제를 불러오지 못했습니다.")), []);
-
-      const v2Data: DashboardV2Data = {
-        profile,
-        activeChapters,
-        dailyStep,
-        selectedCondition,
-        balance,
-        suggestedBucket,
-        review,
-      };
-
-      return (
-        <DashboardContentV2
-          data={v2Data}
-          allTasks={allTasks}
-          fetchError={errors.length > 0 ? errors[0] : undefined}
-        />
-      );
+      redirect("/login");
     }
+
+    const buckets =
+      bucketsResult.status === "fulfilled"
+        ? bucketsResult.value
+        : (errors.push(toErrorMessage(bucketsResult.reason, "버킷 정보를 불러오지 못했습니다.")), []);
+
+    const defaultBucketId = buckets[0]?.id ?? null;
+    const selectedBucketId =
+      selectedBucketQuery && buckets.some((bucket) => bucket.id === selectedBucketQuery)
+        ? selectedBucketQuery
+        : defaultBucketId;
+
+    const [selectedBucketResult, dailyTodosResult, routinesResult, horizonResult] =
+      await Promise.allSettled([
+        getSelectedBucket(supabase, user.id, selectedBucketId),
+        getDailyTodos(supabase, user.id, selectedBucketId),
+        getRoutinesWithCompletions(supabase, user.id, selectedBucketId),
+        getHorizonAnalysis(supabase, user.id, selectedBucketId),
+      ]);
+
+    const selectedBucket =
+      selectedBucketResult.status === "fulfilled"
+        ? selectedBucketResult.value
+        : (errors.push(toErrorMessage(selectedBucketResult.reason, "선택한 버킷을 불러오지 못했습니다.")), null);
+
+    const dailyTodos =
+      dailyTodosResult.status === "fulfilled"
+        ? dailyTodosResult.value
+        : (errors.push(toErrorMessage(dailyTodosResult.reason, "데일리투두를 불러오지 못했습니다.")), []);
+
+    const routines =
+      routinesResult.status === "fulfilled"
+        ? routinesResult.value
+        : (errors.push(toErrorMessage(routinesResult.reason, "루틴 정보를 불러오지 못했습니다.")), []);
+
+    const horizonAnalysis =
+      horizonResult.status === "fulfilled"
+        ? horizonResult.value
+        : (errors.push(toErrorMessage(horizonResult.reason, "AI 추천 정보를 불러오지 못했습니다.")), null);
+
+    const v2Data: DashboardV2Data = {
+      profile,
+      buckets,
+      selectedBucket,
+      activeChapters: [],
+      dailyTodos,
+      routines,
+      horizonAnalysis,
+      extraDailyTodoCount: Math.max(0, dailyTodos.length - 1),
+      extraRoutineCount: Math.max(0, routines.length - 1),
+    };
+
+    return (
+      <DashboardContentV2
+        data={v2Data}
+        fetchError={errors.length > 0 ? errors[0] : undefined}
+      />
+    );
   }
 
-  // 프로필 조회
   const { data: profile } = await supabase
     .from("profiles")
     .select("display_name")
@@ -148,14 +129,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   const displayName = profile?.display_name ?? null;
 
-  // 사용자 전체 과제 + 하위 과제 조회
   const { data: tasks, error } = await supabase
     .from("tasks")
     .select("*, subtasks(*), bucket:buckets(id, title)")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
-  // 에러 발생 시
   if (error) {
     return (
       <DashboardContent
@@ -166,7 +145,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     );
   }
 
-  // 빈 결과
   if (!tasks || tasks.length === 0) {
     return <DashboardEmpty displayName={displayName} />;
   }

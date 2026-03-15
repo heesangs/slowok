@@ -2,6 +2,7 @@
 
 import { geminiModel } from "./gemini";
 import type {
+  ActionLogItemType,
   AISubtaskSuggestion,
   BucketDecompositionSuggestion,
   BucketHorizon,
@@ -13,6 +14,7 @@ import type {
   PaceAdjustOption,
   PersonalityType,
   Profile,
+  SuggestedRoutine,
 } from "@/types";
 
 const LIFE_AREA_OPTIONS = ["건강", "관계", "성장", "경험", "일", "돈", "내면"] as const;
@@ -343,6 +345,109 @@ function normalizeHorizons(rawHorizons: unknown, sceneText: string): HorizonActi
   ];
 }
 
+function normalizeRoutineRepeatUnit(raw: unknown): SuggestedRoutine["repeatUnit"] {
+  if (raw === "daily" || raw === "weekly") {
+    return raw;
+  }
+  if (typeof raw === "string") {
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === "매일" || normalized === "day" || normalized === "every_day") {
+      return "daily";
+    }
+    if (normalized === "매주" || normalized === "week" || normalized === "every_week") {
+      return "weekly";
+    }
+  }
+  return "weekly";
+}
+
+function normalizeRoutineRepeatValue(
+  raw: unknown,
+  unit: SuggestedRoutine["repeatUnit"]
+): number {
+  const fallback = 1;
+  const parsed = Math.round(Number(raw) || fallback);
+  const max = unit === "daily" ? 7 : 14;
+  return Math.max(1, Math.min(max, parsed));
+}
+
+function buildFallbackSuggestedRoutines(sceneText: string): SuggestedRoutine[] {
+  const base = sceneText.trim() || "선택한 장면";
+  return [
+    {
+      title: `${base} 관련 10분 정리하기`,
+      repeatUnit: "weekly",
+      repeatValue: 1,
+    },
+    {
+      title: `${base}를 위한 5분 점검하기`,
+      repeatUnit: "daily",
+      repeatValue: 1,
+    },
+  ];
+}
+
+function normalizeSuggestedRoutines(
+  raw: unknown,
+  sceneText: string
+): SuggestedRoutine[] {
+  if (!Array.isArray(raw)) {
+    return buildFallbackSuggestedRoutines(sceneText);
+  }
+
+  const normalized = raw
+    .map((item) => {
+      const row = item as {
+        title?: unknown;
+        repeatUnit?: unknown;
+        repeat_unit?: unknown;
+        repeatValue?: unknown;
+        repeat_value?: unknown;
+      };
+
+      const title = toNonEmptyText(row.title);
+      if (!title) return null;
+
+      const repeatUnit = normalizeRoutineRepeatUnit(row.repeatUnit ?? row.repeat_unit);
+      const repeatValue = normalizeRoutineRepeatValue(
+        row.repeatValue ?? row.repeat_value,
+        repeatUnit
+      );
+
+      return {
+        title,
+        repeatUnit,
+        repeatValue,
+      };
+    })
+    .filter((row): row is SuggestedRoutine => Boolean(row));
+
+  const deduped: SuggestedRoutine[] = [];
+  const seen = new Set<string>();
+
+  for (const item of normalized) {
+    const key = item.title.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+    if (deduped.length >= 3) break;
+  }
+
+  if (deduped.length >= 2) {
+    return deduped;
+  }
+
+  const fallback = buildFallbackSuggestedRoutines(sceneText);
+  for (const item of fallback) {
+    const key = item.title.toLowerCase();
+    if (seen.has(key)) continue;
+    deduped.push(item);
+    if (deduped.length >= 2) break;
+  }
+
+  return deduped;
+}
+
 interface AnalyzeLifeSceneInput {
   sceneText: string;
   age: number;
@@ -385,6 +490,26 @@ interface DecomposeBucketInput {
   horizon: BucketHorizon;
   profile: Profile | null;
   existingChapterTitles?: string[];
+}
+
+interface GenerateWeeklyItemsInput {
+  bucketTitle: string;
+  lifeArea: string;
+  horizons: HorizonAction[];
+  existingTitles?: string[];
+}
+
+interface GenerateWeeklyItemsResult {
+  dailyTodos: Array<{ title: string }>;
+  routines: SuggestedRoutine[];
+}
+
+interface GenerateActionTipInput {
+  itemTitle: string;
+  itemType: ActionLogItemType;
+  bucketTitle?: string | null;
+  lifeArea?: string | null;
+  profile?: Profile | null;
 }
 
 function normalizePersonalityType(
@@ -696,7 +821,7 @@ export async function analyzeLifeScene(
   }
 
   const prompt = `당신은 slowgoes 앱의 온보딩 AI 코치입니다.
-사용자의 삶의 장면을 다음 2가지를 동시에 생성하세요.
+사용자의 삶의 장면을 다음 3가지를 동시에 생성하세요.
 
 1) 삶의 영역 분류 (건강/관계/성장/경험/일/돈/내면 중 1개)
 2) 시간 지평 액션 분해
@@ -704,6 +829,9 @@ export async function analyzeLifeScene(
 - 1년 안 1개
 - 이번 시즌 1개
 - 이번 주 2~3개 (실행 가능한 아주 작은 행동)
+3) 루틴 제안 2개
+- 각 루틴은 반복 단위(repeatUnit)와 반복 값(repeatValue)을 포함
+- repeatUnit: daily 또는 weekly
 
 사용자 정보:
 - 나이: ${input.age}
@@ -716,6 +844,7 @@ export async function analyzeLifeScene(
 - 공감 메시지는 짧고 따뜻하게 1문장
 - 이번 주 항목은 바로 시작 가능한 행동으로 제안
 - 추상적인 표현보다 구체적인 행동으로 작성
+- suggestedRoutines는 정확히 2개로 작성
 
 아래 JSON 객체만 응답하세요:
 {
@@ -727,6 +856,10 @@ export async function analyzeLifeScene(
     { "level": "this_season", "label": "이번 시즌", "action": "..." },
     { "level": "this_week", "label": "이번 주", "action": "..." },
     { "level": "this_week", "label": "이번 주", "action": "..." }
+  ],
+  "suggestedRoutines": [
+    { "title": "루틴 제목", "repeatUnit": "daily|weekly", "repeatValue": 숫자 },
+    { "title": "루틴 제목", "repeatUnit": "daily|weekly", "repeatValue": 숫자 }
   ]
 }`;
 
@@ -746,17 +879,23 @@ export async function analyzeLifeScene(
     lifeArea?: unknown;
     empathyMessage?: unknown;
     horizons?: unknown;
+    suggestedRoutines?: unknown;
   };
 
   const lifeArea = normalizeLifeArea(object.lifeArea, sceneText);
   const empathyMessage =
     toNonEmptyText(object.empathyMessage) ?? `${lifeArea}에 대한 장면이네요, 멋져요.`;
   const horizons = normalizeHorizons(object.horizons, sceneText);
+  const suggestedRoutines = normalizeSuggestedRoutines(
+    object.suggestedRoutines,
+    sceneText
+  );
 
   return {
     lifeArea,
     empathyMessage,
     horizons,
+    suggestedRoutines,
   };
 }
 
@@ -976,6 +1115,224 @@ ${currentSubtasks || "(세부 단계 없음)"}
     difficulty,
     subtasks,
   };
+}
+
+function buildFallbackDailyTodos(input: GenerateWeeklyItemsInput): Array<{ title: string }> {
+  const thisWeek = input.horizons.find((item) => item.level === "this_week")?.action;
+  return [
+    {
+      title: thisWeek ?? `${input.bucketTitle} 관련 이번 주 시작 행동 1개 하기`,
+    },
+  ];
+}
+
+function normalizeWeeklyItemsResult(
+  raw: unknown,
+  input: GenerateWeeklyItemsInput
+): GenerateWeeklyItemsResult {
+  const existing = new Set(
+    (input.existingTitles ?? []).map((title) => title.trim().toLowerCase()).filter(Boolean)
+  );
+
+  let dailyTodos: Array<{ title: string }> = [];
+  let routines: SuggestedRoutine[] = [];
+
+  if (raw && typeof raw === "object") {
+    const obj = raw as {
+      dailyTodos?: unknown;
+      daily_todos?: unknown;
+      routines?: unknown;
+      suggestedRoutines?: unknown;
+      suggested_routines?: unknown;
+    };
+
+    const rawDailyTodos = Array.isArray(obj.dailyTodos)
+      ? obj.dailyTodos
+      : Array.isArray(obj.daily_todos)
+        ? obj.daily_todos
+        : [];
+
+    dailyTodos = rawDailyTodos
+      .map((row) => {
+        if (typeof row === "string") {
+          const title = row.trim();
+          return title ? { title } : null;
+        }
+        const item = row as { title?: unknown };
+        const title = toNonEmptyText(item.title);
+        return title ? { title } : null;
+      })
+      .filter((row): row is { title: string } => Boolean(row));
+
+    const rawRoutines = obj.routines ?? obj.suggestedRoutines ?? obj.suggested_routines;
+    routines = normalizeSuggestedRoutines(rawRoutines, input.bucketTitle);
+  }
+
+  const dedupedTodos: Array<{ title: string }> = [];
+  const seenTodo = new Set<string>();
+  for (const item of dailyTodos) {
+    const key = item.title.toLowerCase();
+    if (seenTodo.has(key) || existing.has(key)) continue;
+    seenTodo.add(key);
+    dedupedTodos.push(item);
+    if (dedupedTodos.length >= 3) break;
+  }
+
+  if (dedupedTodos.length === 0) {
+    for (const fallback of buildFallbackDailyTodos(input)) {
+      const key = fallback.title.toLowerCase();
+      if (existing.has(key) || seenTodo.has(key)) continue;
+      dedupedTodos.push(fallback);
+      seenTodo.add(key);
+      break;
+    }
+  }
+
+  const dedupedRoutines: SuggestedRoutine[] = [];
+  const seenRoutine = new Set<string>();
+  for (const item of routines) {
+    const key = item.title.toLowerCase();
+    if (seenRoutine.has(key) || existing.has(key)) continue;
+    seenRoutine.add(key);
+    dedupedRoutines.push(item);
+    if (dedupedRoutines.length >= 3) break;
+  }
+
+  if (dedupedRoutines.length === 0) {
+    const fallbackRoutines = buildFallbackSuggestedRoutines(input.bucketTitle);
+    for (const item of fallbackRoutines) {
+      const key = item.title.toLowerCase();
+      if (existing.has(key) || seenRoutine.has(key)) continue;
+      dedupedRoutines.push(item);
+      if (dedupedRoutines.length >= 2) break;
+    }
+  }
+
+  return {
+    dailyTodos: dedupedTodos,
+    routines: dedupedRoutines,
+  };
+}
+
+/**
+ * 대시보드 추천 카드에서 "이번주"를 누를 때, 데일리투두+루틴을 생성하기 위한 AI 추천
+ */
+export async function generateWeeklyItems(
+  input: GenerateWeeklyItemsInput
+): Promise<GenerateWeeklyItemsResult> {
+  const bucketTitle = input.bucketTitle.trim();
+  const lifeArea = input.lifeArea.trim();
+
+  if (!bucketTitle) {
+    throw new Error("버킷 제목이 비어 있습니다.");
+  }
+  if (!lifeArea) {
+    throw new Error("삶의 영역이 비어 있습니다.");
+  }
+
+  const horizonsSummary = input.horizons
+    .map((item) => `${item.label}: ${item.action}`)
+    .join("\n");
+  const existingTitles = (input.existingTitles ?? []).filter(Boolean).join(" | ") || "없음";
+
+  const prompt = `당신은 slowgoes 앱의 실행 코치입니다.
+아래 버킷의 맥락을 바탕으로 이번 주에 추가할 항목을 추천하세요.
+
+입력:
+- 버킷: ${bucketTitle}
+- 삶의 영역: ${lifeArea}
+- 시간 지평:
+${horizonsSummary || "- 정보 없음"}
+- 기존 항목 제목(중복 금지): ${existingTitles}
+
+출력 규칙:
+- dailyTodos: 이번 주에 실천할 일회성 작은 행동 1~2개
+- routines: 반복 루틴 1~2개 (repeatUnit: daily|weekly, repeatValue: 1 이상의 정수)
+- 문장은 한국어
+- 추상적 표현 금지, 바로 실행 가능한 문장
+
+아래 JSON 객체만 응답하세요:
+{
+  "dailyTodos": [
+    { "title": "..." }
+  ],
+  "routines": [
+    { "title": "...", "repeatUnit": "daily|weekly", "repeatValue": 숫자 }
+  ]
+}`;
+
+  let parsed: unknown;
+  try {
+    const result = await geminiModel.generateContent(prompt);
+    parsed = parseJsonResponse(result.response.text());
+  } catch (error) {
+    throw mapGeminiError(error);
+  }
+
+  return normalizeWeeklyItemsResult(parsed, input);
+}
+
+function truncateActionTip(text: string): string {
+  if (text.length <= 220) return text;
+  return `${text.slice(0, 217).trim()}...`;
+}
+
+/**
+ * 행동하기 바텀시트용 AI 조언 생성
+ */
+export async function generateActionTip(
+  input: GenerateActionTipInput
+): Promise<string> {
+  const itemTitle = input.itemTitle.trim();
+  if (!itemTitle) {
+    throw new Error("항목 제목이 비어 있습니다.");
+  }
+
+  const itemTypeLabel = input.itemType === "routine" ? "작은 루틴" : "작은 할 일";
+  const profileContext = buildProfileContext(input.profile ?? null);
+  const personalityPaceBlock = buildPersonalityPacePromptBlock(input.profile ?? null);
+  const bucketLabel = input.bucketTitle?.trim() || "미연결";
+  const lifeArea = input.lifeArea?.trim() || "미정";
+
+  const prompt = `당신은 slowgoes 앱의 행동 코치입니다.
+사용자가 지금 바로 행동을 시작하도록 짧은 조언 1개를 작성하세요.
+
+항목 정보:
+- 유형: ${itemTypeLabel}
+- 제목: ${itemTitle}
+- 버킷: ${bucketLabel}
+- 삶의 영역: ${lifeArea}
+
+사용자 맥락:
+${profileContext}
+${personalityPaceBlock}
+
+규칙:
+- 한국어 1~2문장
+- 지나치게 추상적이거나 장황한 표현 금지
+- 당장 시작 가능한 첫 행동을 포함
+
+아래 JSON 객체만 응답하세요:
+{ "tip": "..." }`;
+
+  let parsed: unknown;
+  try {
+    const result = await geminiModel.generateContent(prompt);
+    parsed = parseJsonResponse(result.response.text());
+  } catch (error) {
+    throw mapGeminiError(error);
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    return `${itemTitle}은(는) 5분만 써서 첫 단계를 시작해보세요.`;
+  }
+
+  const tip = toNonEmptyText((parsed as { tip?: unknown }).tip);
+  if (!tip) {
+    return `${itemTitle}은(는) 5분만 써서 첫 단계를 시작해보세요.`;
+  }
+
+  return truncateActionTip(tip);
 }
 
 /**

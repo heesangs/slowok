@@ -28,6 +28,10 @@ export type HorizonLevel = BucketHorizon | "this_week";
 export type BucketStatus = "not_started" | "in_progress" | "completed" | "paused";
 export type ChapterStatus = "active" | "completed" | "paused";
 export type TaskCondition = "light" | "normal" | "focused" | "tired";
+export type ItemSource = "onboarding" | "ai_generated" | "manual";
+export type DailyTodoStatus = "pending" | "completed";
+export type RoutineRepeatUnit = "daily" | "weekly";
+export type ActionLogItemType = "daily_todo" | "routine";
 export type PaceAdjustOption =
   | "lighter"
   | "more_specific"
@@ -112,14 +116,12 @@ export interface TaskWithSubtasks extends Task {
 
 // 과제 통계 타입
 export interface TaskStats {
-  totalTasks: number;
-  completedTasks: number;
-  inProgressTasks: number;
-  totalSubtasks: number;
-  completedSubtasks: number;
-  estimatedMinutesTotal: number;
-  actualMinutesTotal: number;
-  difficultyDistribution: { easy: number; medium: number; hard: number };
+  totalDailyTodos: number;
+  completedDailyTodos: number;
+  totalRoutines: number;
+  completedRoutinesThisWeek: number;
+  totalActionsCompleted: number;
+  completedInLast14Days: number;
 }
 
 // 클라이언트 편집용 하위 과제 타입
@@ -188,6 +190,79 @@ export interface ChapterWithRelations extends Chapter {
   bucket?: Bucket | null;
 }
 
+export interface DailyTodo {
+  id: string;
+  user_id: string;
+  bucket_id: string | null;
+  title: string;
+  status: DailyTodoStatus;
+  source: ItemSource;
+  action_tip: string | null;
+  action_tip_generated_at: string | null;
+  week_start: string;
+  sort_order: number;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface Routine {
+  id: string;
+  user_id: string;
+  bucket_id: string | null;
+  title: string;
+  source: ItemSource;
+  repeat_unit: RoutineRepeatUnit;
+  repeat_value: number;
+  action_tip: string | null;
+  action_tip_generated_at: string | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface RoutineCompletion {
+  id: string;
+  routine_id: string;
+  user_id: string;
+  week_start: string;
+  completed_at: string;
+}
+
+export interface RoutineWithCompletion extends Routine {
+  completion?: RoutineCompletion | null;
+  is_completed_this_week?: boolean;
+}
+
+export interface SuggestedRoutine {
+  title: string;
+  repeatUnit: RoutineRepeatUnit;
+  repeatValue: number;
+}
+
+export interface HorizonAnalysis {
+  id: string;
+  user_id: string;
+  bucket_id: string;
+  life_area: string;
+  empathy_message: string;
+  horizons: HorizonAction[];
+  suggested_routines: SuggestedRoutine[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ActionLog {
+  id: string;
+  user_id: string;
+  bucket_id: string | null;
+  item_type: ActionLogItemType;
+  item_id: string;
+  title: string;
+  ai_advice: string | null;
+  completed_at: string;
+  created_at: string;
+}
+
 // 온보딩 v2 타입
 export interface OnboardingV2Step1Input {
   age: number;
@@ -216,6 +291,7 @@ export interface LifeSceneAnalysisResult {
   lifeArea: string;
   empathyMessage: string;
   horizons: HorizonAction[];
+  suggestedRoutines: SuggestedRoutine[];
 }
 
 export interface FirstStepPlanResult {
@@ -232,13 +308,22 @@ export interface BucketDecompositionSuggestion {
 
 export interface OnboardingV2SavePayload {
   sceneText: string;
-  selectedWeeklyAction: string;
   lifeArea: string;
   age: number;
   gender: Gender;
   personalityType: PersonalityType;
   paceType: PaceType;
-  plan: FirstStepPlanResult;
+  horizonAnalysis: LifeSceneAnalysisResult;
+  selectedDailyTodos: Array<{ title: string; source?: ItemSource }>;
+  selectedRoutines: Array<{
+    title: string;
+    repeatUnit: RoutineRepeatUnit;
+    repeatValue: number;
+    source?: ItemSource;
+  }>;
+  // legacy 필드 (점진 전환)
+  selectedWeeklyAction?: string;
+  plan?: FirstStepPlanResult;
 }
 
 // 대시보드 v2 타입
@@ -277,6 +362,8 @@ export interface ReviewRecentItem {
   id: string;
   title: string;
   completedAt: string;
+  itemType?: ActionLogItemType;
+  aiAdvice?: string | null;
   estimatedMinutes: number | null;
   actualMinutes: number | null;
   difficultyBefore: Difficulty | null;
@@ -302,10 +389,18 @@ export interface ReviewPageData {
 
 export interface DashboardV2Data {
   profile: Profile;
+  buckets: Array<Pick<Bucket, "id" | "title" | "horizon" | "status" | "created_at">>;
+  selectedBucket: Bucket | null;
   activeChapters: Chapter[];
-  dailyStep: TaskWithSubtasks | null;
-  selectedCondition: TaskCondition;
-  balance: LifeBalanceInsight | null;
-  suggestedBucket: Bucket | null;
-  review: ReviewSummary | null;
+  dailyTodos: DailyTodo[];
+  routines: RoutineWithCompletion[];
+  horizonAnalysis: HorizonAnalysis | null;
+  extraDailyTodoCount: number;
+  extraRoutineCount: number;
+  // legacy 필드 (점진 전환)
+  dailyStep?: TaskWithSubtasks | null;
+  selectedCondition?: TaskCondition;
+  balance?: LifeBalanceInsight | null;
+  suggestedBucket?: Bucket | null;
+  review?: ReviewSummary | null;
 }

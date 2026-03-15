@@ -51,6 +51,13 @@ export default function LandingPage() {
             회원가입
           </Link>
         </div>
+
+        <Link
+          href="/demo"
+          className="text-sm font-medium text-foreground/70 transition-colors hover:text-foreground hover:underline"
+        >
+          로그인 없이 체험해보기 →
+        </Link>
       </main>
     </div>
   );

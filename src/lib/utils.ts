@@ -51,3 +51,16 @@ export const difficultyConfig = {
 export function getDifficultyConfig(difficulty: Difficulty) {
   return difficultyConfig[difficulty];
 }
+
+/**
+ * 이번 주 월요일 날짜를 "YYYY-MM-DD" 형식으로 반환
+ */
+export function getCurrentWeekStartDate(): string {
+  const now = new Date();
+  const day = now.getDay();
+  const mondayDistance = (day + 6) % 7;
+  const monday = new Date(now);
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(now.getDate() - mondayDistance);
+  return monday.toISOString().slice(0, 10);
+}

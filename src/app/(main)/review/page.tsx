@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { ReviewPageContent } from "@/components/review/review-page-content";
+import { getLifeBalance } from "@/lib/dashboard";
 import { getReviewPageData } from "@/lib/stats";
 import { createClient } from "@/lib/supabase/server";
 
@@ -20,13 +21,14 @@ export default async function ReviewPage() {
     redirect("/login");
   }
 
-  const [profileResult, reviewResult] = await Promise.allSettled([
+  const [profileResult, reviewResult, lifeBalanceResult] = await Promise.allSettled([
     supabase
       .from("profiles")
       .select("display_name")
       .eq("id", user.id)
       .maybeSingle(),
     getReviewPageData(supabase, user.id),
+    getLifeBalance(supabase, user.id),
   ]);
 
   let displayName: string | null = null;
@@ -57,10 +59,24 @@ export default async function ReviewPage() {
     fetchError = fetchError ? `${fetchError} ${reviewError}` : reviewError;
   }
 
+  const lifeBalance =
+    lifeBalanceResult.status === "fulfilled"
+      ? lifeBalanceResult.value
+      : null;
+
+  if (lifeBalanceResult.status === "rejected") {
+    const balanceError = toErrorMessage(
+      lifeBalanceResult.reason,
+      "인생균형흐름 데이터를 불러오는 중 일부 오류가 발생했습니다."
+    );
+    fetchError = fetchError ? `${fetchError} ${balanceError}` : balanceError;
+  }
+
   return (
     <ReviewPageContent
       displayName={displayName}
       data={reviewData}
+      lifeBalance={lifeBalance}
       fetchError={fetchError}
     />
   );

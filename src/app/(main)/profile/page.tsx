@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ProfileContent } from "@/components/profile/profile-content";
 import { getTaskStats } from "@/lib/stats";
-import type { Profile } from "@/types";
+import type { Profile, TaskStats } from "@/types";
 
 export default async function ProfilePage() {
   const supabase = await createClient();
@@ -28,8 +28,22 @@ export default async function ProfilePage() {
     redirect("/onboarding");
   }
 
-  // 과제 통계 조회
-  const stats = await getTaskStats(supabase, user.id);
+  // 과제 통계 조회 — 신규 테이블 미적용 등 에러 시 빈 통계로 대체
+  const fallbackStats: TaskStats = {
+    totalDailyTodos: 0,
+    completedDailyTodos: 0,
+    totalRoutines: 0,
+    completedRoutinesThisWeek: 0,
+    totalActionsCompleted: 0,
+    completedInLast14Days: 0,
+  };
+
+  let stats: TaskStats;
+  try {
+    stats = await getTaskStats(supabase, user.id);
+  } catch {
+    stats = fallbackStats;
+  }
 
   return (
     <ProfileContent

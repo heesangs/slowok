@@ -18,25 +18,6 @@ export default function MainLayout({
           </Link>
           <div className="flex items-center gap-2">
             <Link
-              href="/buckets"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-foreground/5"
-              aria-label="버킷"
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={1.5}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M3 7.5A1.5 1.5 0 014.5 6h4.379a1.5 1.5 0 011.06.44l1.121 1.12a1.5 1.5 0 001.061.44H19.5A1.5 1.5 0 0121 9.5v8A1.5 1.5 0 0119.5 19h-15A1.5 1.5 0 013 17.5v-10z"
-                />
-              </svg>
-            </Link>
-            <Link
               href="/review"
               className="inline-flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-foreground/5"
               aria-label="회고"

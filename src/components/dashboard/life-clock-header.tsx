@@ -27,7 +27,7 @@ export function LifeClockHeader({ age, activeChapterTitle }: LifeClockHeaderProp
       <p className="text-sm text-foreground/60">인생 시계</p>
       <p className="text-xl font-semibold mt-1">{lifeClockLabel}</p>
       <p className="text-sm text-foreground/70 mt-3">
-        이번 시즌의 장면: {activeChapterTitle ?? "지금은 탐색의 챕터"}
+        선택한 버킷: {activeChapterTitle ?? "지금은 탐색 단계"}
       </p>
     </section>
   );

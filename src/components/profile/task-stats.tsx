@@ -1,10 +1,6 @@
 "use client";
 
-// 통계 섹션 — 4개 카드 + 빈 상태 처리
-
-import Link from "next/link";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import type { TaskStats } from "@/types";
 
 interface TaskStatsSectionProps {
@@ -12,216 +8,93 @@ interface TaskStatsSectionProps {
 }
 
 export function TaskStatsSection({ stats }: TaskStatsSectionProps) {
-  // 할 일이 없는 경우
-  if (stats.totalTasks === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <h2 className="text-base font-semibold">나의 통계</h2>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center gap-4 py-8">
-          <p className="text-sm text-foreground/60 text-center">
-            아직 할 일이 없어요.<br />
-            첫 할 일을 만들면 통계를 볼 수 있어요.
-          </p>
-          <Link href="/tasks/new">
-            <Button size="sm">첫 할 일 만들기</Button>
-          </Link>
-        </CardContent>
-      </Card>
-    );
-  }
+  const totalItems = stats.totalDailyTodos + stats.totalRoutines;
 
-  // 할 일은 있지만 완료가 없는 경우
-  if (stats.completedTasks === 0) {
+  if (totalItems === 0) {
     return (
       <Card>
         <CardHeader>
           <h2 className="text-base font-semibold">나의 통계</h2>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-2 py-8">
-          <p className="text-sm text-foreground/60 text-center">
-            할 일을 완료하면 여기에 통계가 나타나요
-          </p>
-          <p className="text-xs text-foreground/40">
-            진행 중 {stats.inProgressTasks}개 / 전체 {stats.totalTasks}개
+          <p className="text-center text-sm text-foreground/60">
+            아직 데일리투두와 루틴이 없어요.
+            <br />
+            대시보드에서 버킷을 추가하면 통계가 채워집니다.
           </p>
         </CardContent>
       </Card>
     );
   }
 
-  const completionRate = Math.round(
-    (stats.completedTasks / stats.totalTasks) * 100
-  );
-
-  // 시간 예측 정확도 계산 (actual이 있는 task만)
-  const hasTimeData = stats.actualMinutesTotal > 0 && stats.estimatedMinutesTotal > 0;
-  let timeDiffPercent = 0;
-  let timeMessage = "";
-  if (hasTimeData) {
-    timeDiffPercent = Math.round(
-      ((stats.actualMinutesTotal - stats.estimatedMinutesTotal) /
-        stats.estimatedMinutesTotal) *
-        100
-    );
-    if (Math.abs(timeDiffPercent) <= 10) {
-      timeMessage = "예상이 꽤 정확해요!";
-    } else if (timeDiffPercent > 10) {
-      timeMessage = `예상보다 평균 ${timeDiffPercent}% 더 걸렸어요`;
-    } else {
-      timeMessage = `예상보다 평균 ${Math.abs(timeDiffPercent)}% 빠르게 끝냈어요`;
-    }
-  }
-
-  const { easy, medium, hard } = stats.difficultyDistribution;
-  const hasDifficultyData = easy + medium + hard > 0;
-  const maxDifficulty = Math.max(easy, medium, hard, 1);
+  const completionRate =
+    totalItems > 0
+      ? Math.round((stats.totalActionsCompleted / Math.max(totalItems, 1)) * 100)
+      : 0;
 
   return (
     <div className="flex flex-col gap-4">
       <h2 className="text-base font-semibold">나의 통계</h2>
 
-      {/* Card 1: 할 일 요약 */}
       <div className="grid grid-cols-2 gap-3">
         <Card>
           <CardContent className="flex flex-col items-center py-4">
-            <span className="text-2xl font-bold">{stats.totalTasks}</span>
-            <span className="text-xs text-foreground/60">전체 할 일</span>
+            <span className="text-2xl font-bold">{stats.totalDailyTodos}</span>
+            <span className="text-xs text-foreground/60">데일리투두</span>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="flex flex-col items-center py-4">
-            <span className="text-2xl font-bold">{stats.completedTasks}</span>
-            <span className="text-xs text-foreground/60">완료</span>
+            <span className="text-2xl font-bold">{stats.totalRoutines}</span>
+            <span className="text-xs text-foreground/60">루틴</span>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="flex flex-col items-center py-4">
-            <span className="text-2xl font-bold">{stats.inProgressTasks}</span>
-            <span className="text-xs text-foreground/60">진행 중</span>
+            <span className="text-2xl font-bold">{stats.totalActionsCompleted}</span>
+            <span className="text-xs text-foreground/60">누적 완료 행동</span>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="flex flex-col items-center py-4">
-            <span className="text-2xl font-bold">{completionRate}%</span>
-            <span className="text-xs text-foreground/60">완료율</span>
+            <span className="text-2xl font-bold">{stats.completedInLast14Days}</span>
+            <span className="text-xs text-foreground/60">최근 14일 완료</span>
           </CardContent>
         </Card>
       </div>
 
-      {/* Card 2: 세부 단계 진행률 */}
       <Card>
-        <CardContent className="flex flex-col gap-3 py-4">
+        <CardContent className="flex flex-col gap-2 py-4">
           <p className="text-sm text-foreground/80">
-            세분화한 <span className="font-semibold">{stats.totalSubtasks}개</span>의 단계 중{" "}
-            <span className="font-semibold">{stats.completedSubtasks}개</span>를 완료했어요
+            이번 주 루틴 완료 <span className="font-semibold">{stats.completedRoutinesThisWeek}개</span>
           </p>
           <div className="h-3 w-full rounded-full bg-foreground/10">
             <div
               className="h-3 rounded-full bg-foreground transition-all"
               style={{
-                width: `${stats.totalSubtasks > 0 ? Math.round((stats.completedSubtasks / stats.totalSubtasks) * 100) : 0}%`,
+                width: `${stats.totalRoutines > 0 ? Math.round((stats.completedRoutinesThisWeek / stats.totalRoutines) * 100) : 0}%`,
               }}
             />
           </div>
-          <p className="text-xs text-foreground/50 text-right">
-            {stats.totalSubtasks > 0
-              ? `${Math.round((stats.completedSubtasks / stats.totalSubtasks) * 100)}%`
+          <p className="text-right text-xs text-foreground/50">
+            {stats.totalRoutines > 0
+              ? `${Math.round((stats.completedRoutinesThisWeek / stats.totalRoutines) * 100)}%`
               : "0%"}
+          </p>
+          <p className="text-xs text-foreground/55">실행 완료율(참고): {completionRate}%</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="flex flex-col gap-1 py-4">
+          <p className="text-sm text-foreground/80">
+            완료된 데일리투두 <span className="font-semibold">{stats.completedDailyTodos}개</span>
+          </p>
+          <p className="text-xs text-foreground/55">
+            전체 데일리투두 {stats.totalDailyTodos}개 중 완료 비율을 추적합니다.
           </p>
         </CardContent>
       </Card>
-
-      {/* Card 3: 시간 예측 정확도 */}
-      <Card>
-        <CardContent className="flex flex-col gap-3 py-4">
-          <p className="text-sm font-medium">시간 예측 정확도</p>
-          {hasTimeData ? (
-            <>
-              <p className="text-sm text-foreground/70">{timeMessage}</p>
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-foreground/50 w-10 shrink-0">예상</span>
-                  <div className="flex-1 h-3 rounded-full bg-foreground/10">
-                    <div
-                      className="h-3 rounded-full bg-foreground/40"
-                      style={{
-                        width: `${Math.min(100, Math.round((stats.estimatedMinutesTotal / Math.max(stats.estimatedMinutesTotal, stats.actualMinutesTotal)) * 100))}%`,
-                      }}
-                    />
-                  </div>
-                  <span className="text-xs text-foreground/50 w-14 text-right shrink-0">
-                    {stats.estimatedMinutesTotal}분
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-foreground/50 w-10 shrink-0">실제</span>
-                  <div className="flex-1 h-3 rounded-full bg-foreground/10">
-                    <div
-                      className="h-3 rounded-full bg-foreground"
-                      style={{
-                        width: `${Math.min(100, Math.round((stats.actualMinutesTotal / Math.max(stats.estimatedMinutesTotal, stats.actualMinutesTotal)) * 100))}%`,
-                      }}
-                    />
-                  </div>
-                  <span className="text-xs text-foreground/50 w-14 text-right shrink-0">
-                    {stats.actualMinutesTotal}분
-                  </span>
-                </div>
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-foreground/50">
-              할 일을 완료하면 예측 정확도를 알려드릴게요
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Card 4: 난이도 분포 */}
-      {hasDifficultyData && (
-        <Card>
-          <CardContent className="flex flex-col gap-3 py-4">
-            <p className="text-sm font-medium">난이도 분포</p>
-            <div className="flex flex-col gap-2.5">
-              {/* 수월 */}
-              <div className="flex items-center gap-3">
-                <span className="text-xs w-28 shrink-0">수월했어요 🟢</span>
-                <div className="flex-1 h-3 rounded-full bg-foreground/10">
-                  <div
-                    className="h-3 rounded-full bg-green-500"
-                    style={{ width: `${Math.round((easy / maxDifficulty) * 100)}%` }}
-                  />
-                </div>
-                <span className="text-xs text-foreground/60 w-8 text-right shrink-0">{easy}</span>
-              </div>
-              {/* 적당 */}
-              <div className="flex items-center gap-3">
-                <span className="text-xs w-28 shrink-0">적당했어요 🟡</span>
-                <div className="flex-1 h-3 rounded-full bg-foreground/10">
-                  <div
-                    className="h-3 rounded-full bg-yellow-500"
-                    style={{ width: `${Math.round((medium / maxDifficulty) * 100)}%` }}
-                  />
-                </div>
-                <span className="text-xs text-foreground/60 w-8 text-right shrink-0">{medium}</span>
-              </div>
-              {/* 도전 */}
-              <div className="flex items-center gap-3">
-                <span className="text-xs w-28 shrink-0">도전적이었어요 🔴</span>
-                <div className="flex-1 h-3 rounded-full bg-foreground/10">
-                  <div
-                    className="h-3 rounded-full bg-red-500"
-                    style={{ width: `${Math.round((hard / maxDifficulty) * 100)}%` }}
-                  />
-                </div>
-                <span className="text-xs text-foreground/60 w-8 text-right shrink-0">{hard}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

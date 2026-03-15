@@ -4,8 +4,10 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { featureFlags } from "@/lib/flags";
+import { analyzeLifeScene } from "@/lib/ai/analyze";
 import { redirect } from "next/navigation";
 import type {
+  LifeSceneAnalysisResult,
   OnboardingV2SavePayload,
   PaceType,
   PersonalityType,
@@ -291,7 +293,6 @@ export async function saveOnboardingV2Action(
   }
 ) {
   const sceneText = data.sceneText?.trim();
-  const selectedWeeklyAction = data.selectedWeeklyAction?.trim();
   const lifeArea = data.lifeArea?.trim();
   const displayName = data.displayName?.trim() || "slowgoes 사용자";
   const chapterTitle =
@@ -302,9 +303,6 @@ export async function saveOnboardingV2Action(
   }
   if (!sceneText) {
     return { error: "삶의 장면이 비어 있습니다." };
-  }
-  if (!selectedWeeklyAction) {
-    return { error: "이번 주에 시작할 한 걸음을 선택해주세요." };
   }
   if (!lifeArea) {
     return { error: "삶의 영역 정보가 비어 있습니다." };
@@ -338,26 +336,56 @@ export async function saveOnboardingV2Action(
       .filter((subject) => subject.length > 0)
   )];
 
-  const normalizedSubtasks = data.plan.subtasks
-    .map((subtask) => ({
-      title: subtask.title.trim(),
-      difficulty: subtask.difficulty,
-      estimated_minutes: Math.max(5, Math.min(120, Math.round(subtask.estimated_minutes || 10))),
+  const normalizedDailyTodos = (data.selectedDailyTodos ?? [])
+    .map((item) => ({
+      title: item.title?.trim() ?? "",
+      source: item.source ?? "onboarding",
     }))
-    .filter((subtask) => subtask.title.length > 0);
+    .filter((item) => item.title.length > 0);
 
-  if (normalizedSubtasks.length === 0) {
-    return { error: "세부 단계가 비어 있습니다." };
+  const normalizedRoutines = (data.selectedRoutines ?? [])
+    .map((item) => ({
+      title: item.title?.trim() ?? "",
+      repeatUnit: item.repeatUnit === "daily" ? "daily" : "weekly",
+      repeatValue: Math.max(1, Math.min(item.repeatUnit === "daily" ? 7 : 14, Math.round(item.repeatValue || 1))),
+      source: item.source ?? "onboarding",
+    }))
+    .filter((item) => item.title.length > 0);
+
+  // 점진 전환: 구버전 payload가 들어오면 selectedWeeklyAction을 daily todo로 승격
+  const legacyWeeklyAction = data.selectedWeeklyAction?.trim();
+  if (normalizedDailyTodos.length === 0 && legacyWeeklyAction) {
+    normalizedDailyTodos.push({
+      title: legacyWeeklyAction,
+      source: "onboarding",
+    });
   }
 
-  const totalEstimatedMinutes = Math.max(
-    5,
-    Math.round(
-      Number.isFinite(data.plan.estimatedMinutes)
-        ? data.plan.estimatedMinutes
-        : normalizedSubtasks.reduce((sum, subtask) => sum + subtask.estimated_minutes, 0)
-    )
-  );
+  if (normalizedDailyTodos.length === 0 && normalizedRoutines.length === 0) {
+    return { error: "데일리투두 또는 루틴을 최소 1개 선택해주세요." };
+  }
+
+  const normalizedHorizons = (data.horizonAnalysis?.horizons ?? []).map((item) => ({
+    level: item.level,
+    label: item.label,
+    action: item.action,
+  }));
+  const normalizedSuggestedRoutines = (data.horizonAnalysis?.suggestedRoutines ?? [])
+    .map((item) => ({
+      title: item.title?.trim() ?? "",
+      repeatUnit: item.repeatUnit === "daily" ? "daily" : "weekly",
+      repeatValue: Math.max(1, Math.min(item.repeatUnit === "daily" ? 7 : 14, Math.round(item.repeatValue || 1))),
+    }))
+    .filter((item) => item.title.length > 0);
+
+  const horizonAnalysisPayload = {
+    lifeArea,
+    empathyMessage:
+      data.horizonAnalysis?.empathyMessage?.trim() ||
+      `${lifeArea}에 대한 장면이네요, 멋져요.`,
+    horizons: normalizedHorizons,
+    suggestedRoutines: normalizedSuggestedRoutines,
+  };
 
   const supabase = await createClient();
   const {
@@ -372,7 +400,7 @@ export async function saveOnboardingV2Action(
     return { error: "온보딩 v2가 비활성화되어 있습니다." };
   }
 
-  const { error } = await supabase.rpc("save_onboarding_data", {
+  const { error } = await supabase.rpc("save_onboarding_journey", {
     p_user_id: user.id,
     p_display_name: displayName,
     p_self_level: data.selfLevel,
@@ -386,9 +414,10 @@ export async function saveOnboardingV2Action(
     p_scene_text: sceneText,
     p_life_area_name: lifeArea,
     p_chapter_title: chapterTitle,
-    p_task_title: selectedWeeklyAction,
-    p_total_estimated_minutes: totalEstimatedMinutes,
-    p_subtasks: normalizedSubtasks,
+    p_bucket_horizon: "someday",
+    p_horizon_analysis: horizonAnalysisPayload,
+    p_daily_todos: normalizedDailyTodos,
+    p_routines: normalizedRoutines,
   });
 
   if (error) {
@@ -396,4 +425,58 @@ export async function saveOnboardingV2Action(
   }
 
   redirect("/dashboard?onboarding_saved=1");
+}
+
+/**
+ * 삶의 장면 분석 — 영역 분류 + 시간 지평 + 루틴 추천 (온보딩 Step 3)
+ */
+export async function analyzeLifeSceneAction(data: {
+  sceneText: string;
+  age: number;
+  gender: Gender;
+  personalityType: PersonalityType;
+}): Promise<{
+  success: boolean;
+  data?: LifeSceneAnalysisResult;
+  error?: string;
+}> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new Error("인증이 필요합니다.");
+    }
+
+    const sceneText = data.sceneText?.trim();
+    if (!sceneText) {
+      throw new Error("삶의 장면을 입력해주세요.");
+    }
+    if (!Number.isFinite(data.age) || data.age < 0 || data.age > 100) {
+      throw new Error("나이 값이 올바르지 않습니다.");
+    }
+    if (!VALID_GENDERS.includes(data.gender as ProfileGender)) {
+      throw new Error("성별 값이 올바르지 않습니다.");
+    }
+    if (!VALID_PERSONALITY_TYPES.includes(data.personalityType as ProfilePersonality)) {
+      throw new Error("성향 값이 올바르지 않습니다.");
+    }
+
+    const analysis = await analyzeLifeScene({
+      sceneText,
+      age: data.age,
+      gender: data.gender,
+      personalityType: data.personalityType,
+    });
+
+    return { success: true, data: analysis };
+  } catch (error) {
+    const message =
+      error instanceof Error && error.message.trim().length > 0
+        ? error.message
+        : "삶의 장면 분석 중 오류가 발생했습니다.";
+    return { success: false, error: message };
+  }
 }
